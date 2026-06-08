@@ -51,9 +51,40 @@ class Spectrum:
         mask = (self.frequencies >= low) & (self.frequencies <= high)
         return Spectrum(self.magnitudes[mask], self.frequencies[mask])
 
+    def to_signal(self, sample_rate: int) -> "Signal":
+        """Reconstruct a time-domain signal via inverse FFT.
+
+        Because this Spectrum stores only magnitudes (no phase information),
+        the reconstructed signal has zero phase - all components are cosines.
+        This is useful for synthesis and spectral shaping, but is **not** a
+        lossless round-trip from the original signal.
+
+        Args:
+            sample_rate: Sample rate of the output Signal in Hz.
+
+        Returns:
+            A Signal whose frequency content matches these magnitudes.
+        """
+        from .signal import Signal
+
+        n_full = (len(self.magnitudes) - 1) * 2
+        # Undo the 2/n normalisation applied in Signal.fft()
+        coeffs = (self.magnitudes * n_full / 2.0).astype(complex)
+        # DC and Nyquist bins are not doubled in rfft, so halve them back
+        coeffs[0] /= 2.0
+        if n_full % 2 == 0:
+            coeffs[-1] /= 2.0
+        data = np.fft.irfft(coeffs, n=n_full)
+        return Signal(data, sample_rate)
+
     def plot(
-        self, title: Optional[str] = None, xlabel: Optional[str] = None, ylabel: Optional[str] = None, log_scale: bool = False,
-        max_freq: Optional[float] = None, ax=None,
+        self,
+        title: Optional[str] = None,
+        xlabel: Optional[str] = None,
+        ylabel: Optional[str] = None,
+        log_scale: bool = False,
+        max_freq: Optional[float] = None,
+        ax=None,
     ):
         """Plot the magnitude spectrum. Returns the matplotlib axis."""
         import matplotlib.pyplot as plt

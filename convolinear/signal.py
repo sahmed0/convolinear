@@ -21,9 +21,9 @@ class Signal:
     """
 
     def __init__(self, data: np.ndarray, sample_rate: int):
-        """NOTE: Treat Signal.data as read-only.
+        """NOTE: Treat the data array as read-only.
         May add self.data.flags.writeable = False in the future
-        To enforce immutability. """
+        To enforce immutability."""
         self.data = np.asarray(data, dtype=np.float64)
         self.sample_rate = int(sample_rate)
 
@@ -51,7 +51,7 @@ class Signal:
 
     @classmethod
     def from_audio(cls, path: str) -> "Signal":
-        """Load a signal from an audio file (FLAC, MP3, OGG, and others)."""
+        """Load a signal from an audio file (WAV,FLAC, MP3, OGG, and others)."""
         try:
             import soundfile as sf
         except ImportError:
@@ -89,8 +89,7 @@ class Signal:
         if time_column not in df.columns:
             available = ", ".join(df.columns.tolist())
             raise ValueError(
-                f"Time column '{time_column}' not found. "
-                f"Available columns: {available}"
+                f"Time column '{time_column}' not found. Available columns: {available}"
             )
 
         times = df[time_column]
@@ -123,7 +122,6 @@ class Signal:
         median_interval = float(np.median(intervals))
         inferred_rate = round(1.0 / median_interval)
         return inferred_rate
-
 
     @classmethod
     def from_csv(
@@ -175,8 +173,7 @@ class Signal:
         if value_column not in df.columns:
             available = ", ".join(df.columns.tolist())
             raise ValueError(
-                f"Column '{value_column}' not found. "
-                f"Available columns: {available}"
+                f"Column '{value_column}' not found. Available columns: {available}"
             )
 
         data = df[value_column].to_numpy(dtype=np.float64)
@@ -194,7 +191,7 @@ class Signal:
         **pandas_kwargs,
     ) -> "Signal":
         """Load a signal from a Parquet file.
-        
+
         You must provide either a ``time_column`` (and the sample rate will be
         inferred from it) or an explicit ``sample_rate``. If you provide both,
         the explicit ``sample_rate`` takes precedence.
@@ -220,7 +217,7 @@ class Signal:
 
             # Parquet with ISO datetime timestamps
             Signal.from_parquet("log.parquet", value_column="temp", time_column="timestamp")
-            """
+        """
         try:
             import pandas as pd
         except ImportError:
@@ -234,8 +231,7 @@ class Signal:
         if value_column not in df.columns:
             available = ", ".join(df.columns.tolist())
             raise ValueError(
-                f"Column '{value_column}' not found. "
-                f"Available columns: {available}"
+                f"Column '{value_column}' not found. Available columns: {available}"
             )
 
         data = df[value_column].to_numpy(dtype=np.float64)
@@ -257,7 +253,7 @@ class Signal:
                          .npy or .npz file.
             sample_rate: Samples per second.
             column:      If ``array`` is 2D (multiple channels), which column
-                         index to use. Defaults to None (resolve to 0 for 2D arrays).
+                         index to use. Defaults to None (resolved to 0 for 2D arrays).
 
         Example::
 
@@ -295,9 +291,7 @@ class Signal:
                 )
             array = array[:, col]
         elif array.ndim != 1:
-            raise ValueError(
-                f"Array must be 1D or 2D, got shape {array.shape}."
-            )
+            raise ValueError(f"Array must be 1D or 2D, got shape {array.shape}.")
 
         return cls(array, sample_rate)
 
@@ -350,9 +344,7 @@ class Signal:
                 )
             if column not in series_or_df.columns:
                 available = ", ".join(series_or_df.columns.tolist())
-                raise ValueError(
-                    f"Column '{column}' not found. Available: {available}"
-                )
+                raise ValueError(f"Column '{column}' not found. Available: {available}")
             series = series_or_df[column]
         elif isinstance(series_or_df, pd.Series):
             series = series_or_df
@@ -458,7 +450,8 @@ class Signal:
         else:
             # Auto-detect: find numeric arrays (exclude scalars / sample rate)
             numeric_keys = [
-                k for k in data_keys
+                k
+                for k in data_keys
                 if isinstance(mat[k], np.ndarray) and mat[k].size > 1
             ]
             if len(numeric_keys) == 0:
@@ -509,8 +502,12 @@ class Signal:
 
     @classmethod
     def sine(
-        cls, frequency: float, duration: float, sample_rate: int = 44100,
-        amplitude: float = 1.0, phase: float = 0.0,
+        cls,
+        frequency: float,
+        duration: float,
+        sample_rate: int = 44100,
+        amplitude: float = 1.0,
+        phase: float = 0.0,
     ) -> "Signal":
         """Generate a pure sine wave. Convenience constructor."""
         return cls.from_function(
@@ -521,7 +518,10 @@ class Signal:
 
     @classmethod
     def noise(
-        cls, duration: float, sample_rate: int = 44100, amplitude: float = 1.0,
+        cls,
+        duration: float,
+        sample_rate: int = 44100,
+        amplitude: float = 1.0,
         seed: Optional[int] = None,
     ) -> "Signal":
         """Generate white noise. Convenience constructor."""
@@ -540,6 +540,32 @@ class Signal:
     def time_axis(self) -> np.ndarray:
         """Array of time values for each sample, in seconds."""
         return np.arange(len(self.data)) / self.sample_rate
+
+    @property
+    def rms(self) -> float:
+        """Root mean square amplitude - a measure of average signal energy.
+
+        A full-scale sine wave (amplitude 1.0) has an RMS of 1/√2 ≈ 0.707.
+        """
+        return float(np.sqrt(np.mean(self.data**2)))
+
+    @property
+    def rms_db(self) -> float:
+        """RMS amplitude in dBFS (decibels relative to full scale).
+
+        Returns ``-inf`` for a silent signal.
+        """
+        r = self.rms
+        return float("-inf") if r == 0.0 else float(20 * np.log10(r))
+
+    @property
+    def peak_db(self) -> float:
+        """Peak absolute amplitude in dBFS.
+
+        Returns ``-inf`` for a silent signal.
+        """
+        p = float(np.max(np.abs(self.data)))
+        return float("-inf") if p == 0.0 else float(20 * np.log10(p))
 
     def __len__(self) -> int:
         return len(self.data)
@@ -574,32 +600,6 @@ class Signal:
         """Apply gain in decibels. +6dB doubles amplitude, -6dB halves it."""
         return self.gain(10 ** (db / 20))
 
-    def lowpass(self, cutoff: float, order: int = 4) -> "Signal":
-        """Apply a Butterworth low-pass filter. Cutoff in Hz."""
-        return self._butter_filter(cutoff, order, btype="low")
-
-    def highpass(self, cutoff: float, order: int = 4) -> "Signal":
-        """Apply a Butterworth high-pass filter. Cutoff in Hz."""
-        return self._butter_filter(cutoff, order, btype="high")
-
-    def bandpass(self, low: float, high: float, order: int = 4) -> "Signal":
-        """Apply a Butterworth band-pass filter. Frequencies in Hz."""
-        return self._butter_filter([low, high], order, btype="band")
-
-    def _butter_filter(
-        self, cutoff: Union[float, list], order: int, btype: str
-    ) -> "Signal":
-        nyquist = self.sample_rate / 2
-        normalized = np.asarray(cutoff) / nyquist
-        if np.any(normalized >= 1) or np.any(normalized <= 0):
-            raise ValueError(
-                f"Cutoff frequency {cutoff} Hz is out of range. "
-                f"Must be between 0 and {nyquist} Hz (Nyquist limit)."
-            )
-        sos = scipy_signal.butter(order, normalized, btype=btype, output="sos")
-        filtered = scipy_signal.sosfiltfilt(sos, self.data)
-        return Signal(filtered, self.sample_rate)
-    
     def __add__(self, other: "Signal") -> "Signal":
         """Mix two signals by adding their samples element-wise.
 
@@ -621,24 +621,154 @@ class Signal:
         b = np.pad(other.data, (0, n - len(other.data)))
         return Signal(a + b, self.sample_rate)
 
+    def concat(self, other: "Signal") -> "Signal":
+        """Append another signal onto the end of this one.
+
+        Use this to join signals end-to-end. To overlay (mix) two signals
+        at the same time, use the ``+`` operator instead.
+
+        Both signals must have the same sample rate.
+
+        Raises:
+            TypeError: if ``other`` is not a Signal.
+            ValueError: if sample rates differ.
+        """
+        if not isinstance(other, Signal):
+            raise TypeError(f"Expected a Signal, got {type(other).__name__}.")
+        if self.sample_rate != other.sample_rate:
+            raise ValueError(
+                f"Cannot concatenate signals with different sample rates: "
+                f"{self.sample_rate} Hz vs {other.sample_rate} Hz."
+            )
+        return Signal(np.concatenate([self.data, other.data]), self.sample_rate)
+
+    def remove_dc(self) -> "Signal":
+        """Remove the DC offset by subtracting the mean from every sample."""
+        return Signal(self.data - np.mean(self.data), self.sample_rate)
+
+    def reverse(self) -> "Signal":
+        """Flip the signal in time."""
+        return Signal(self.data[::-1].copy(), self.sample_rate)
+
+    def clip(self, min_val: float = -1.0, max_val: float = 1.0) -> "Signal":
+        """Clamp all samples to the range [min_val, max_val].
+
+        Raises:
+            ValueError: if min_val >= max_val.
+        """
+        if min_val >= max_val:
+            raise ValueError(
+                f"min_val ({min_val}) must be less than max_val ({max_val})."
+            )
+        return Signal(np.clip(self.data, min_val, max_val), self.sample_rate)
+
+    def fade_in(self, duration: float) -> "Signal":
+        """Apply a linear fade-in from 0 to 1 over ``duration`` seconds.
+
+        The ramp is capped at the full signal length so oversized durations
+        do not raise an error.
+        """
+        n_fade = min(int(duration * self.sample_rate), len(self.data))
+        envelope = self.data.copy()
+        envelope[:n_fade] *= np.linspace(0.0, 1.0, n_fade)
+        return Signal(envelope, self.sample_rate)
+
+    def fade_out(self, duration: float) -> "Signal":
+        """Apply a linear fade-out from 1 to 0 over ``duration`` seconds.
+
+        The ramp is capped at the full signal length so oversized durations
+        do not raise an error.
+        """
+        n_fade = min(int(duration * self.sample_rate), len(self.data))
+        envelope = self.data.copy()
+        envelope[-n_fade:] *= np.linspace(1.0, 0.0, n_fade)
+        return Signal(envelope, self.sample_rate)
+
+    def lowpass(self, cutoff: float, order: int = 4) -> "Signal":
+        """Apply a Butterworth low-pass filter. Cutoff in Hz."""
+        return self._butter_filter(cutoff, order, btype="low")
+
+    def highpass(self, cutoff: float, order: int = 4) -> "Signal":
+        """Apply a Butterworth high-pass filter. Cutoff in Hz."""
+        return self._butter_filter(cutoff, order, btype="high")
+
+    def bandpass(self, low: float, high: float, order: int = 4) -> "Signal":
+        """Apply a Butterworth band-pass filter. Frequencies in Hz."""
+        return self._butter_filter([low, high], order, btype="band")
+
+    def bandstop(self, low: float, high: float, order: int = 4) -> "Signal":
+        """Apply a Butterworth band-stop (notch) filter. Frequencies in Hz.
+
+        Attenuates the band between ``low`` and ``high`` Hz and passes
+        everything outside it. The inverse of ``bandpass``.
+
+        Raises:
+            ValueError: if either cutoff is outside (0, Nyquist).
+        """
+        return self._butter_filter([low, high], order, btype="bandstop")
+
+    def _butter_filter(
+        self, cutoff: Union[float, list], order: int, btype: str
+    ) -> "Signal":
+        nyquist = self.sample_rate / 2
+        normalized = np.asarray(cutoff) / nyquist
+        if np.any(normalized >= 1) or np.any(normalized <= 0):
+            raise ValueError(
+                f"Cutoff frequency {cutoff} Hz is out of range. "
+                f"Must be between 0 and {nyquist} Hz (Nyquist limit)."
+            )
+        sos = scipy_signal.butter(order, normalized, btype=btype, output="sos")
+        filtered = scipy_signal.sosfiltfilt(sos, self.data)
+        return Signal(filtered, self.sample_rate)
+
     def resample(self, new_sample_rate: int) -> "Signal":
         """Resample the signal to a new sample rate."""
         new_n = int(len(self.data) * new_sample_rate / self.sample_rate)
         resampled = np.asarray(scipy_signal.resample(self.data, new_n))
         return Signal(resampled, new_sample_rate)
 
+    _FFT_WINDOWS = {
+        "hann": np.hanning,
+        "hamming": np.hamming,
+        "blackman": np.blackman,
+        "bartlett": np.bartlett,
+    }
+
     # NOTE: Spectrum doesn't need quotes due to if TYPE_CHECKING import
-    def fft(self) -> Spectrum:
+    def fft(self, window: Optional[str] = None) -> Spectrum:
         """Convert to the frequency domain via FFT.
 
+        Args:
+            window: Window function to reduce spectral leakage. Accepted values
+                    are ``"hann"`` (recommended for general use), ``"hamming"``,
+                    ``"blackman"``, and ``"bartlett"``. Defaults to ``None``
+                    (rectangular window - no windowing).
+
         Returns a Spectrum object with magnitude vs frequency.
+
+        Raises:
+            ValueError: if ``window`` is not a recognised name.
         """
         from .spectrum import Spectrum
 
         n = len(self.data)
-        frequencies = np.fft.rfftfreq(n, d=1 / self.sample_rate)
-        # Normalise so amplitudes are physically meaningful
-        magnitudes = np.abs(np.fft.rfft(self.data)) * 2 / n
+        data = self.data
+
+        if window is not None:
+            key = window.lower()
+            if key not in Signal._FFT_WINDOWS:
+                raise ValueError(
+                    f"Unknown window '{window}'. "
+                    f"Choose from: {', '.join(Signal._FFT_WINDOWS)}."
+                )
+            w = Signal._FFT_WINDOWS[key](n)
+            data = data * w
+            norm_factor = 2.0 / w.sum()
+        else:
+            norm_factor = 2.0 / n
+
+        frequencies = np.fft.rfftfreq(n, d=1.0 / self.sample_rate)
+        magnitudes = np.abs(np.fft.rfft(data)) * norm_factor
         return Spectrum(magnitudes, frequencies)
 
     # --- Input/Output & visualisation ---
@@ -651,7 +781,13 @@ class Signal:
         wavfile.write(path, self.sample_rate, int_data)
         return self
 
-    def plot(self, title: Optional[str] = None, xlabel: Optional[str] = None, ylabel: Optional[str] = None, ax=None):
+    def plot(
+        self,
+        title: Optional[str] = None,
+        xlabel: Optional[str] = None,
+        ylabel: Optional[str] = None,
+        ax=None,
+    ):
         """Plot the signal in the time domain. Returns the matplotlib axis."""
         import matplotlib.pyplot as plt
 

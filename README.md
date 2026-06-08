@@ -9,6 +9,7 @@ instead of 10+ lines of boilerplate.
 [![MIT License](https://img.shields.io/badge/MIT-2026_Sajid_Ahmed-limegreen.svg)](https://opensource.org/license/mit)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org/)
 
+
 ### Example
 You can
 1. Extract data from a .WAV file,
@@ -64,7 +65,7 @@ Install optional extras for the loaders and features you need:
 ```bash
 pip install "convolinear[plot]"    # matplotlib - required for .plot()
 pip install "convolinear[audio]"   # soundfile  - required for Signal.from_audio()
-pip install "convolinear[pandas]"    # pandas + pyarrow - required for from_csv / from_parquet / from_pandas
+pip install "convolinear[pandas]"  # pandas + pyarrow - required for from_csv / from_parquet / from_pandas
 ```
 
 Combine extras in one command:
@@ -152,8 +153,9 @@ sig = Signal.from_wav("recording.wav")
 
 ### `Signal.from_audio(path)`
 
-Load a signal from WAV, FLAC, MP3, OGG, and any other audio format supported by the `soundfile` library.
-NOTE: If you are only working with WAV files, using `Signal.from_wav(path)` is recommended as it doesn't require the `soundfile` library.
+Load a signal from audio files such as WAV, FLAC, MP3, OGG, and any other format supported by
+the `soundfile` library.
+NOTE: If you are only working with WAV files, I recommend using from_wav() as it does not need the `soundfile` package.
 
 ```python
 sig = Signal.from_audio("recording.flac")
@@ -441,8 +443,8 @@ print(sig.sample_rate)  # 44100
 
 ### `sig.data`
 
-The underlying samples as a `np.ndarray` of dtype `float64`.
-NOTE: I recommend treating `sig.data` as read-only.
+The underlying data samples in the form of a `np.ndarray` of dtype `float64`.
+NOTE: I recommend treating this array as read-only.
 
 ```python
 print(sig.data[:10])
@@ -455,6 +457,42 @@ NumPy array of the time value (in seconds) for each sample. Useful for plotting.
 ```python
 import matplotlib.pyplot as plt
 plt.plot(sig.time_axis, sig.data)
+```
+
+### `sig.rms`
+
+Root mean square amplitude - a measure of the signal's average energy.
+
+```python
+tone = Signal.sine(440, duration=1.0, amplitude=1.0)
+print(tone.rms)  # ≈ 0.707  (1/√2 for a full sine wave)
+
+noise = Signal.noise(duration=1.0, amplitude=0.1)
+print(noise.rms)  # ≈ 0.1
+```
+
+### `sig.rms_db`
+
+RMS amplitude expressed in dBFS (decibels relative to full scale). Returns `-inf` for a silent signal.
+
+```python
+tone = Signal.sine(440, duration=1.0, amplitude=1.0)
+print(tone.rms_db)   # ≈ -3.01  (1/√2 in dB)
+
+silence = Signal(np.zeros(100), sample_rate=100)
+print(silence.rms_db)  # -inf
+```
+
+### `sig.peak_db`
+
+Peak absolute amplitude expressed in dBFS. Returns `-inf` for a silent signal.
+
+```python
+tone = Signal.sine(440, duration=1.0, amplitude=1.0)
+print(tone.peak_db)   # ≈ 0.0  (peak of 1.0 = 0 dBFS)
+
+quiet = Signal.sine(440, duration=1.0, amplitude=0.5)
+print(quiet.peak_db)  # ≈ -6.02
 ```
 
 ### `len(sig)`
@@ -538,6 +576,28 @@ sig.gain_db(-20)  # reduce to 10% amplitude
 
 ---
 
+
+### `.concat(other)`
+
+Append another signal onto the end of this one, joining them sequentially. To overlay (mix)
+two signals at the same point in time, use the `+` operator instead.
+
+Both signals must have the same sample rate.
+
+```python
+intro  = Signal.sine(440, duration=0.5)
+outro  = Signal.sine(880, duration=0.5)
+joined = intro.concat(outro)
+print(joined.duration)  # 1.0
+
+# Build a sequence from a list
+parts = [Signal.sine(f, duration=0.25) for f in [261, 293, 329, 349]]
+melody = parts[0].concat(parts[1]).concat(parts[2]).concat(parts[3])
+```
+
+Raises `ValueError` if the sample rates differ.
+
+---
 
 ### `.resample(new_sample_rate)`
 
@@ -670,7 +730,7 @@ plt.show()
 
 ---
 
-### `.fft()`
+### `.fft(window=None)`
 
 Convert to the frequency domain. Returns a `Spectrum` object.
 
@@ -678,6 +738,28 @@ Convert to the frequency domain. Returns a `Spectrum` object.
 spectrum = sig.fft()
 print(spectrum.peak_frequency)  # dominant frequency in Hz
 ```
+
+An optional `window` function reduces spectral leakage - visible as spurious
+sidelobes around real frequency peaks when a signal does not contain a whole number
+of cycles. Use `"hann"` as a good general-purpose choice.
+
+```python
+# Rectangular window (default) - no processing, fastest
+spec = sig.fft()
+
+# Hann window - recommended for most audio and sensor analysis
+spec = sig.fft(window="hann")
+```
+
+| `window` value | Character |
+|----------------|-----------|
+| `None` (default) | Rectangular - no windowing |
+| `"hann"` | Low sidelobes, good general use |
+| `"hamming"` | Slightly higher sidelobes, better frequency resolution |
+| `"blackman"` | Very low sidelobes, wider main lobe |
+| `"bartlett"` | Triangular taper |
+
+Raises `ValueError` for unrecognised window names.
 
 ---
 
@@ -738,6 +820,29 @@ spec = Signal.from_wav("audio.wav").fft()
 sub_bass = spec.in_range(20, 80)
 print(sub_bass.peak_frequency)
 ```
+
+---
+
+### `spec.to_signal(sample_rate)`
+
+Reconstruct a time-domain `Signal` via the inverse FFT. Because a `Spectrum` stores only
+magnitudes (not phase), the reconstructed signal has **zero phase** - all components are
+cosines. This is useful for synthesis and spectral shaping, but is not a lossless round-trip
+from an original recording.
+
+```python
+sig = Signal.sine(440, duration=1.0)
+spec = sig.fft()
+
+# Keep only the 300–600 Hz band, then synthesise back to time domain
+filtered_spec = spec.in_range(300, 600)
+reconstructed = filtered_spec.to_signal(sample_rate=44100)
+reconstructed.plot(title="Band-limited synthesis")
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sample_rate` | `int` | Sample rate of the output Signal in Hz |
 
 ---
 
@@ -819,7 +924,35 @@ for freq, mag in chord.fft().top_n(3):
 
 ---
 
-### 3. Plot before and after filtering
+### 3. Remove mains hum (50 Hz)
+
+```python
+from convolinear import Signal
+
+sig = Signal.from_wav("hum_affected.wav")
+clean = sig.remove_dc().bandstop(45, 55).normalize()
+clean.to_wav("no_hum.wav")
+```
+
+---
+
+### 4. Build a test tone with a precise energy level
+
+```python
+from convolinear import Signal
+
+target_rms = 0.1
+tone = Signal.sine(1000, duration=5.0, sample_rate=44100)
+
+# Scale to exact RMS
+scaled = tone.gain(target_rms / tone.rms)
+print(f"RMS: {scaled.rms:.4f}")  # 0.1000
+scaled.to_wav("reference_tone.wav")
+```
+
+---
+
+### 5. Plot before and after filtering
 
 ```python
 import matplotlib.pyplot as plt
@@ -910,7 +1043,6 @@ pytest
 5. Run pytest again to check if anything breaks,
 6. Commit changes to your fork,
 7. Open a Pull Request.
-
 ---
 
 ## License

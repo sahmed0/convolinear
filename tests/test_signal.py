@@ -144,6 +144,7 @@ class TestSpectrum:
 
 # ─── New constructor tests ────────────────────────────────────────────────────
 
+
 class TestFromCSV:
     def _write_csv(self, tmp_path, rows: str) -> str:
         p = tmp_path / "test.csv"
@@ -158,7 +159,9 @@ class TestFromCSV:
         np.testing.assert_array_almost_equal(sig.data, [1.0, 2.0, 3.0, 4.0])
 
     def test_infer_rate_from_numeric_time_column(self, tmp_path):
-        path = self._write_csv(tmp_path, "t,value\n0.0,1.0\n0.01,2.0\n0.02,3.0\n0.03,4.0\n")
+        path = self._write_csv(
+            tmp_path, "t,value\n0.0,1.0\n0.01,2.0\n0.02,3.0\n0.03,4.0\n"
+        )
         sig = Signal.from_csv(path, value_column="value", time_column="t")
         assert sig.sample_rate == 100
 
@@ -220,6 +223,7 @@ class TestFromNumpy:
 class TestFromPandas:
     def test_from_series_explicit_rate(self):
         import pandas as pd
+
         series = pd.Series([1.0, 2.0, 3.0, 4.0])
         sig = Signal.from_pandas(series, sample_rate=100)
         assert sig.sample_rate == 100
@@ -227,18 +231,21 @@ class TestFromPandas:
 
     def test_from_dataframe_with_column(self):
         import pandas as pd
+
         df = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [4.0, 5.0, 6.0]})
         sig = Signal.from_pandas(df, column="b", sample_rate=10)
         np.testing.assert_array_almost_equal(sig.data, [4.0, 5.0, 6.0])
 
     def test_dataframe_without_column_raises(self):
         import pandas as pd
+
         df = pd.DataFrame({"a": [1.0, 2.0]})
         with pytest.raises(ValueError, match="column"):
             Signal.from_pandas(df, sample_rate=10)
 
     def test_infer_rate_from_datetime_index(self):
         import pandas as pd
+
         index = pd.date_range("2024-01-01", periods=4, freq="10ms")
         series = pd.Series([1.0, 2.0, 3.0, 4.0], index=index)
         sig = Signal.from_pandas(series)
@@ -246,6 +253,7 @@ class TestFromPandas:
 
     def test_infer_rate_from_numeric_index(self):
         import pandas as pd
+
         series = pd.Series([1.0, 2.0, 3.0, 4.0], index=[0.0, 0.01, 0.02, 0.03])
         sig = Signal.from_pandas(series)
         assert sig.sample_rate == 100
@@ -258,6 +266,7 @@ class TestFromPandas:
 class TestFromMatlab:
     def _make_mat(self, tmp_path, data: dict) -> str:
         from scipy.io import savemat
+
         path = str(tmp_path / "test.mat")
         savemat(path, data)
         return path
@@ -305,58 +314,70 @@ class TestFromMatlab:
 class TestRateFromDataframe:
     def test_explicit_sample_rate_takes_precedence(self):
         import pandas as pd
+
         df = pd.DataFrame({"t": [0.0, 0.01, 0.02, 0.03], "v": [1.0, 2.0, 3.0, 4.0]})
         rate = Signal._rate_from_dataframe(df, time_column="t", sample_rate=500)
         assert rate == 500
 
     def test_infer_from_numeric_time_column(self):
         import pandas as pd
+
         df = pd.DataFrame({"t": [0.0, 0.01, 0.02, 0.03], "v": [1.0, 2.0, 3.0, 4.0]})
         rate = Signal._rate_from_dataframe(df, time_column="t", sample_rate=None)
         assert rate == 100
 
     def test_infer_from_datetime_string_column(self):
         import pandas as pd
-        df = pd.DataFrame({
-            "ts": [
-                "2024-01-01 00:00:00.000",
-                "2024-01-01 00:00:00.010",
-                "2024-01-01 00:00:00.020",
-                "2024-01-01 00:00:00.030",
-            ],
-            "v": [1.0, 2.0, 3.0, 4.0],
-        })
+
+        df = pd.DataFrame(
+            {
+                "ts": [
+                    "2024-01-01 00:00:00.000",
+                    "2024-01-01 00:00:00.010",
+                    "2024-01-01 00:00:00.020",
+                    "2024-01-01 00:00:00.030",
+                ],
+                "v": [1.0, 2.0, 3.0, 4.0],
+            }
+        )
         rate = Signal._rate_from_dataframe(df, time_column="ts", sample_rate=None)
         assert rate == 100
 
     def test_missing_time_column_raises(self):
         import pandas as pd
+
         df = pd.DataFrame({"v": [1.0, 2.0, 3.0]})
         with pytest.raises(ValueError, match="not found"):
             Signal._rate_from_dataframe(df, time_column="nonexistent", sample_rate=None)
 
     def test_no_rate_no_time_column_raises(self):
         import pandas as pd
+
         df = pd.DataFrame({"v": [1.0, 2.0, 3.0]})
         with pytest.raises(ValueError, match="sample_rate"):
             Signal._rate_from_dataframe(df, time_column=None, sample_rate=None)
 
     def test_single_row_raises(self):
         import pandas as pd
+
         df = pd.DataFrame({"t": [0.0], "v": [1.0]})
         with pytest.raises(ValueError):
             Signal._rate_from_dataframe(df, time_column="t", sample_rate=None)
 
     def test_non_increasing_timestamps_raises(self):
         import pandas as pd
+
         df = pd.DataFrame({"t": [0.0, 0.02, 0.01, 0.03], "v": [1.0, 2.0, 3.0, 4.0]})
         with pytest.raises(ValueError, match="increasing"):
             Signal._rate_from_dataframe(df, time_column="t", sample_rate=None)
 
 
 class TestFromAudio:
-    def _write_audio(self, tmp_path, data: np.ndarray, sample_rate: int, filename: str) -> str:
+    def _write_audio(
+        self, tmp_path, data: np.ndarray, sample_rate: int, filename: str
+    ) -> str:
         import soundfile as sf
+
         path = str(tmp_path / filename)
         # Use FLOAT subtype for WAV to avoid 16-bit PCM quantization error
         fmt = "WAV" if filename.endswith(".wav") else None
@@ -402,6 +423,7 @@ class TestFromParquet:
 
     def test_explicit_sample_rate(self, tmp_path):
         import pandas as pd
+
         df = pd.DataFrame({"value": [1.0, 2.0, 3.0, 4.0]})
         path = self._write_parquet(tmp_path, df)
         sig = Signal.from_parquet(path, value_column="value", sample_rate=100)
@@ -410,6 +432,7 @@ class TestFromParquet:
 
     def test_infer_rate_from_numeric_time_column(self, tmp_path):
         import pandas as pd
+
         df = pd.DataFrame({"t": [0.0, 0.01, 0.02, 0.03], "value": [1.0, 2.0, 3.0, 4.0]})
         path = self._write_parquet(tmp_path, df)
         sig = Signal.from_parquet(path, value_column="value", time_column="t")
@@ -417,21 +440,25 @@ class TestFromParquet:
 
     def test_infer_rate_from_datetime_column(self, tmp_path):
         import pandas as pd
-        df = pd.DataFrame({
-            "ts": [
-                "2024-01-01 00:00:00.000",
-                "2024-01-01 00:00:00.010",
-                "2024-01-01 00:00:00.020",
-                "2024-01-01 00:00:00.030",
-            ],
-            "value": [1.0, 2.0, 3.0, 4.0],
-        })
+
+        df = pd.DataFrame(
+            {
+                "ts": [
+                    "2024-01-01 00:00:00.000",
+                    "2024-01-01 00:00:00.010",
+                    "2024-01-01 00:00:00.020",
+                    "2024-01-01 00:00:00.030",
+                ],
+                "value": [1.0, 2.0, 3.0, 4.0],
+            }
+        )
         path = self._write_parquet(tmp_path, df)
         sig = Signal.from_parquet(path, value_column="value", time_column="ts")
         assert sig.sample_rate == 100
 
     def test_missing_value_column_raises(self, tmp_path):
         import pandas as pd
+
         df = pd.DataFrame({"value": [1.0, 2.0]})
         path = self._write_parquet(tmp_path, df)
         with pytest.raises(ValueError, match="not found"):
@@ -439,6 +466,7 @@ class TestFromParquet:
 
     def test_no_rate_no_time_column_raises(self, tmp_path):
         import pandas as pd
+
         df = pd.DataFrame({"value": [1.0, 2.0]})
         path = self._write_parquet(tmp_path, df)
         with pytest.raises(ValueError, match="sample_rate"):
@@ -448,6 +476,7 @@ class TestFromParquet:
 class TestFromWav:
     def test_loads_mono_wav(self, tmp_path):
         from scipy.io import wavfile
+
         data = np.array([0.5, -0.5, 0.25, -0.25], dtype=np.float32)
         path = str(tmp_path / "mono.wav")
         wavfile.write(path, 8000, data)
@@ -457,6 +486,7 @@ class TestFromWav:
 
     def test_stereo_to_mono(self, tmp_path):
         from scipy.io import wavfile
+
         ch1 = np.array([1.0, 0.0, -1.0, 0.0], dtype=np.float32)
         ch2 = np.array([0.0, 1.0, 0.0, -1.0], dtype=np.float32)
         stereo = np.column_stack([ch1, ch2])
@@ -468,6 +498,7 @@ class TestFromWav:
 
     def test_integer_normalization(self, tmp_path):
         from scipy.io import wavfile
+
         # Max int16 value should normalize to 1.0
         data = np.array([32767, -32768, 16384], dtype=np.int16)
         path = str(tmp_path / "int16.wav")
@@ -530,6 +561,7 @@ class TestResample:
 class TestToWav:
     def test_roundtrip_sample_rate(self, tmp_path):
         from scipy.io import wavfile
+
         sig = Signal.sine(440, duration=0.1, sample_rate=8000)
         path = str(tmp_path / "out.wav")
         sig.to_wav(path)
@@ -544,6 +576,7 @@ class TestToWav:
 
     def test_data_approximately_preserved(self, tmp_path):
         from scipy.io import wavfile
+
         sig = Signal(np.array([0.5, -0.5, 0.25, -0.25]), sample_rate=8000)
         path = str(tmp_path / "out.wav")
         sig.to_wav(path)
@@ -565,3 +598,295 @@ class TestTimeAxis:
         n, sr = 100, 1000
         sig = Signal(np.zeros(n), sample_rate=sr)
         assert sig.time_axis[-1] == pytest.approx((n - 1) / sr)
+
+
+# ─── v0.2.0 feature tests ─────────────────────────────────────────────────────
+
+
+class TestMixing:
+    """Tests for Signal.__add__ (mixing operator)."""
+
+    def test_add_element_wise(self):
+        a = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=3)
+        b = Signal(np.array([0.1, 0.2, 0.3]), sample_rate=3)
+        mixed = a + b
+        np.testing.assert_array_almost_equal(mixed.data, [1.1, 2.2, 3.3])
+
+    def test_add_same_sample_rate_preserved(self):
+        a = Signal.sine(440, duration=0.1, sample_rate=8000)
+        b = Signal.sine(880, duration=0.1, sample_rate=8000)
+        assert (a + b).sample_rate == 8000
+
+    def test_add_pads_shorter_signal(self):
+        long_sig = Signal(np.ones(10), sample_rate=10)
+        short_sig = Signal(np.ones(4), sample_rate=10)
+        result = long_sig + short_sig
+        assert len(result) == 10
+        np.testing.assert_array_almost_equal(result.data[:4], 2.0)
+        np.testing.assert_array_almost_equal(result.data[4:], 1.0)
+
+    def test_add_commutativity(self):
+        a = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=3)
+        b = Signal(np.array([0.5, 0.5, 0.5]), sample_rate=3)
+        np.testing.assert_array_almost_equal((a + b).data, (b + a).data)
+
+    def test_add_mismatched_sample_rate_raises(self):
+        a = Signal.sine(440, duration=0.1, sample_rate=8000)
+        b = Signal.sine(440, duration=0.1, sample_rate=44100)
+        with pytest.raises(ValueError, match="sample rate"):
+            _ = a + b
+
+    def test_add_non_signal_returns_not_implemented(self):
+        sig = Signal(np.array([1.0, 2.0]), sample_rate=2)
+        assert sig.__add__(42) is NotImplemented
+
+    def test_add_returns_signal_instance(self):
+        a = Signal(np.array([1.0]), sample_rate=1)
+        b = Signal(np.array([1.0]), sample_rate=1)
+        assert isinstance(a + b, Signal)
+
+
+class TestConcat:
+    """Tests for Signal.concat()."""
+
+    def test_concat_length(self):
+        a = Signal(np.ones(4), sample_rate=4)
+        b = Signal(np.ones(6), sample_rate=4)
+        assert len(a.concat(b)) == 10
+
+    def test_concat_data_order(self):
+        a = Signal(np.array([1.0, 2.0]), sample_rate=2)
+        b = Signal(np.array([3.0, 4.0]), sample_rate=2)
+        np.testing.assert_array_almost_equal(a.concat(b).data, [1.0, 2.0, 3.0, 4.0])
+
+    def test_concat_sample_rate_preserved(self):
+        a = Signal(np.ones(4), sample_rate=8000)
+        b = Signal(np.ones(4), sample_rate=8000)
+        assert a.concat(b).sample_rate == 8000
+
+    def test_concat_mismatched_rate_raises(self):
+        a = Signal(np.ones(4), sample_rate=8000)
+        b = Signal(np.ones(4), sample_rate=44100)
+        with pytest.raises(ValueError, match="sample rate"):
+            a.concat(b)
+
+    def test_concat_non_signal_raises(self):
+        sig = Signal(np.ones(4), sample_rate=4)
+        with pytest.raises(TypeError):
+            sig.concat([1.0, 2.0])
+
+    def test_concat_is_not_commutative(self):
+        a = Signal(np.array([1.0, 2.0]), sample_rate=2)
+        b = Signal(np.array([3.0, 4.0]), sample_rate=2)
+        assert not np.array_equal(a.concat(b).data, b.concat(a).data)
+
+
+class TestAmplitudeProperties:
+    """Tests for Signal.rms, Signal.rms_db, and Signal.peak_db."""
+
+    def test_rms_full_scale_sine(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=44100, amplitude=1.0)
+        assert sig.rms == pytest.approx(1.0 / np.sqrt(2), rel=1e-3)
+
+    def test_rms_constant_signal(self):
+        sig = Signal(np.full(100, 2.0), sample_rate=100)
+        assert sig.rms == pytest.approx(2.0)
+
+    def test_rms_zero_signal(self):
+        sig = Signal(np.zeros(100), sample_rate=100)
+        assert sig.rms == pytest.approx(0.0)
+
+    def test_rms_db_full_scale_sine(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=44100, amplitude=1.0)
+        # RMS of a sine = 1/√2 → 20*log10(1/√2) ≈ -3.0103 dB
+        assert sig.rms_db == pytest.approx(-3.0103, abs=0.05)
+
+    def test_rms_db_zero_signal(self):
+        sig = Signal(np.zeros(100), sample_rate=100)
+        assert sig.rms_db == float("-inf")
+
+    def test_peak_db_unit_amplitude(self):
+        sig = Signal(np.array([1.0, -0.5, 0.2]), sample_rate=3)
+        assert sig.peak_db == pytest.approx(0.0)
+
+    def test_peak_db_half_amplitude(self):
+        sig = Signal(np.array([0.5, -0.5]), sample_rate=2)
+        assert sig.peak_db == pytest.approx(20 * np.log10(0.5))
+
+    def test_peak_db_zero_signal(self):
+        sig = Signal(np.zeros(10), sample_rate=10)
+        assert sig.peak_db == float("-inf")
+
+
+class TestRemoveDC:
+    def test_remove_dc_zeroes_mean(self):
+        sig = Signal(np.array([1.1, 1.5, 0.9, 1.3]), sample_rate=4)
+        assert sig.remove_dc().data.mean() == pytest.approx(0.0, abs=1e-12)
+
+    def test_remove_dc_preserves_length_and_rate(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=10)
+        out = sig.remove_dc()
+        assert len(out) == 3
+        assert out.sample_rate == 10
+
+    def test_remove_dc_zero_input_unchanged(self):
+        sig = Signal(np.zeros(5), sample_rate=5)
+        np.testing.assert_array_almost_equal(sig.remove_dc().data, np.zeros(5))
+
+    def test_remove_dc_returns_new_signal(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=3)
+        assert sig.remove_dc() is not sig
+
+
+class TestReverse:
+    def test_reverse_known_array(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0, 4.0]), sample_rate=4)
+        np.testing.assert_array_equal(sig.reverse().data, [4.0, 3.0, 2.0, 1.0])
+
+    def test_reverse_twice_is_identity(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        np.testing.assert_array_almost_equal(sig.reverse().reverse().data, sig.data)
+
+    def test_reverse_preserves_sample_rate(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=42)
+        assert sig.reverse().sample_rate == 42
+
+
+class TestClip:
+    def test_clip_clamps_above_max(self):
+        sig = Signal(np.array([1.5, -0.5, 0.8]), sample_rate=3)
+        out = sig.clip(-1.0, 1.0)
+        assert out.data[0] == pytest.approx(1.0)
+
+    def test_clip_clamps_below_min(self):
+        sig = Signal(np.array([-1.5, 0.5, 0.3]), sample_rate=3)
+        out = sig.clip(-1.0, 1.0)
+        assert out.data[0] == pytest.approx(-1.0)
+
+    def test_clip_in_range_unchanged(self):
+        sig = Signal(np.array([0.3, -0.3, 0.5]), sample_rate=3)
+        np.testing.assert_array_almost_equal(sig.clip(-1.0, 1.0).data, sig.data)
+
+    def test_clip_custom_bounds(self):
+        sig = Signal(np.array([0.8, 0.1, -0.2]), sample_rate=3)
+        out = sig.clip(0.0, 0.5)
+        assert out.data[0] == pytest.approx(0.5)
+        assert out.data[2] == pytest.approx(0.0)
+
+    def test_clip_invalid_bounds_raises(self):
+        sig = Signal(np.array([1.0, 2.0]), sample_rate=2)
+        with pytest.raises(ValueError):
+            sig.clip(1.0, 0.5)
+
+
+class TestFades:
+    def test_fade_in_first_sample_is_zero(self):
+        sig = Signal(np.ones(1000), sample_rate=1000)
+        faded = sig.fade_in(0.5)
+        assert faded.data[0] == pytest.approx(0.0)
+
+    def test_fade_in_end_of_ramp_is_full(self):
+        sig = Signal(np.ones(1000), sample_rate=1000)
+        faded = sig.fade_in(0.5)  # 500-sample ramp
+        # Sample at index 499 (last fade sample) should be multiplied by 1.0
+        assert faded.data[499] == pytest.approx(1.0)
+
+    def test_fade_in_beyond_signal_length_no_error(self):
+        sig = Signal(np.ones(10), sample_rate=10)
+        out = sig.fade_in(999.0)  # duration >> signal length
+        assert isinstance(out, Signal)
+
+    def test_fade_out_last_sample_is_zero(self):
+        sig = Signal(np.ones(1000), sample_rate=1000)
+        faded = sig.fade_out(0.5)
+        assert faded.data[-1] == pytest.approx(0.0)
+
+    def test_fade_out_beyond_signal_length_no_error(self):
+        sig = Signal(np.ones(10), sample_rate=10)
+        out = sig.fade_out(999.0)
+        assert isinstance(out, Signal)
+
+    def test_fade_in_out_chain(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=8000)
+        out = sig.fade_in(0.05).fade_out(0.05)
+        assert isinstance(out, Signal)
+        assert len(out) == len(sig)
+
+
+class TestBandstop:
+    def test_bandstop_attenuates_stopped_frequency(self):
+        t = np.arange(8000) / 8000
+        mixed = np.sin(2 * np.pi * 200 * t) + np.sin(2 * np.pi * 1000 * t)
+        sig = Signal(mixed, sample_rate=8000)
+        filtered = sig.bandstop(900, 1100)
+        orig_mag = sig.fft().in_range(950, 1050).peak_magnitude
+        filt_mag = filtered.fft().in_range(950, 1050).peak_magnitude
+        assert filt_mag < orig_mag * 0.1  # at least 10× attenuation
+
+    def test_bandstop_passes_outside_frequencies(self):
+        t = np.arange(8000) / 8000
+        mixed = np.sin(2 * np.pi * 200 * t) + np.sin(2 * np.pi * 1000 * t)
+        sig = Signal(mixed, sample_rate=8000)
+        filtered = sig.bandstop(900, 1100)
+        orig_low = sig.fft().in_range(150, 250).peak_magnitude
+        filt_low = filtered.fft().in_range(150, 250).peak_magnitude
+        assert filt_low > orig_low * 0.9  # 200 Hz component largely preserved
+
+    def test_bandstop_cutoff_out_of_range_raises(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        with pytest.raises(ValueError, match="out of range"):
+            sig.bandstop(900, 5000)  # 5000 Hz > Nyquist (4000 Hz)
+
+    def test_bandstop_returns_signal(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        assert isinstance(sig.bandstop(300, 600), Signal)
+
+
+class TestFFTWindowing:
+    def test_no_window_matches_default(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=8000)
+        spec_none = sig.fft(window=None)
+        spec_default = sig.fft()
+        np.testing.assert_array_equal(spec_none.magnitudes, spec_default.magnitudes)
+
+    def test_hann_peak_frequency_preserved(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=8000)
+        spec = sig.fft(window="hann")
+        assert spec.peak_frequency == pytest.approx(440, abs=2)
+
+    def test_unknown_window_raises(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        with pytest.raises(ValueError, match="Unknown window"):
+            sig.fft(window="kaiser")
+
+    @pytest.mark.parametrize("win", ["hann", "hamming", "blackman", "bartlett"])
+    def test_all_windows_run_without_error(self, win):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        spec = sig.fft(window=win)
+        assert isinstance(spec, Spectrum)
+
+    def test_window_case_insensitive(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        spec = sig.fft(window="HANN")
+        assert isinstance(spec, Spectrum)
+
+
+class TestSpectrumToSignal:
+    def test_returns_signal_instance(self):
+        spec = Signal.sine(440, duration=1.0, sample_rate=8000).fft()
+        assert isinstance(spec.to_signal(8000), Signal)
+
+    def test_sample_rate_propagated(self):
+        spec = Signal.sine(440, duration=1.0, sample_rate=8000).fft()
+        out = spec.to_signal(8000)
+        assert out.sample_rate == 8000
+
+    def test_output_length(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=8000)
+        out = sig.fft().to_signal(8000)
+        assert len(out) == len(sig)
+
+    def test_dominant_frequency_preserved(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=8000)
+        reconstructed = sig.fft().to_signal(8000)
+        assert reconstructed.fft().peak_frequency == pytest.approx(440, abs=2)

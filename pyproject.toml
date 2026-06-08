@@ -12,7 +12,7 @@ packages = ["convolinear"]
 
 [project]
 name = "convolinear"
-version = "0.1.0"
+version = "0.2.0"
 description = "A fluent time-series and signal processing library for building data pipelines in a single line of Python."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,7 @@ authors = [
 keywords = ["fluent", "data", "time-series", "signal-processing", "dsp", "audio", "fft", "filter"]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Typing :: Typed",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
@@ -48,3 +49,8 @@ dev    = ["pytest>=7.0", "matplotlib>=3.4", "pandas>=2.0", "pyarrow>=14.0", "sou
 Homepage   = "https://github.com/sahmed0/convolinear#readme"
 Repository = "https://github.com/sahmed0/convolinear"
 Issues     = "https://github.com/sahmed0/convolinear/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

@@ -3,7 +3,6 @@
 Run with: python examples/demo.py
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
 from convolinear import Signal
 
@@ -23,7 +22,7 @@ def main():
     # 3. Analyse: take the FFT and find the dominant frequency
     spectrum = cleaned.fft()
     print(f"\nDominant frequency: {spectrum.peak_frequency:.1f} Hz (expected ~440 Hz)")
-    print(f"Top 3 peaks:")
+    print("Top 3 peaks:")
     for freq, mag in spectrum.top_n(3):
         print(f"  {freq:7.1f} Hz   magnitude {mag:.4f}")
 
