@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+# Only include source files, README and LICENSE in .tar.gz file
+[tool.hatch.build.targets.sdist]
+include = ["convolinear/**", "README.md", "LICENSE"]
+
+# Only include source files in .whl file
+[tool.hatch.build.targets.wheel]
+packages = ["convolinear"]
+
+[project]
+name = "convolinear"
+version = "0.1.0"
+description = "A fluent time-series and signal processing library for building data pipelines in a single line of Python."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Sajid Ahmed", email = "bracer.chasm-8i@icloud.com" },
+]
+keywords = ["fluent", "data", "time-series", "signal-processing", "dsp", "audio", "fft", "filter"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "numpy>=1.23.2",
+    "scipy>=1.8.0",
+]
+
+[project.optional-dependencies]
+plot   = ["matplotlib>=3.4.0"]
+pandas = ["pandas>=2.0", "pyarrow>=14.0"]
+audio = ["soundfile>=0.13.0"]
+dev    = ["pytest>=7.0", "matplotlib>=3.4", "pandas>=2.0", "pyarrow>=14.0", "soundfile>=0.13.0"]
+
+[project.urls]
+Homepage   = "https://github.com/sahmed0/convolinear#readme"
+Repository = "https://github.com/sahmed0/convolinear"
+Issues     = "https://github.com/sahmed0/convolinear/issues"
