@@ -51,6 +51,13 @@ Repository = "https://github.com/sahmed0/convolinear"
 Issues     = "https://github.com/sahmed0/convolinear/issues"
 
 [dependency-groups]
+# The default group `uv sync` installs. Mirror the full test toolchain from
+# [project.optional-dependencies].dev so `uv run pytest` has every library the
+# suite imports (matplotlib, pandas, pyarrow, soundfile) - not just pytest.
 dev = [
     "pytest>=9.0.3",
+    "matplotlib>=3.4",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    "soundfile>=0.13.0",
 ]

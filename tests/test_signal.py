@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from convolinear import Signal, Spectrum
+from convolinear import Signal, Spectrum, Spectrogram
 
 
 class TestSignalConstruction:
@@ -585,6 +585,74 @@ class TestToWav:
         np.testing.assert_array_almost_equal(recovered, sig.data, decimal=3)
 
 
+class TestToDataframe:
+    def test_default_columns(self):
+        sig = Signal(np.array([0.5, -0.5, 0.25]), sample_rate=10)
+        df = sig.to_dataframe()
+        assert list(df.columns) == ["time", "amplitude"]
+        np.testing.assert_array_almost_equal(df["amplitude"].to_numpy(), sig.data)
+        np.testing.assert_array_almost_equal(df["time"].to_numpy(), sig.time_axis)
+
+    def test_custom_column_names(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        df = sig.to_dataframe(value_column="volts", time_column="t_s")
+        assert list(df.columns) == ["t_s", "volts"]
+
+    def test_omit_time_column(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=10)
+        df = sig.to_dataframe(time_column=None)
+        assert list(df.columns) == ["amplitude"]
+
+    def test_row_count_matches_signal(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        assert len(sig.to_dataframe()) == len(sig)
+
+    def test_roundtrip_through_from_pandas(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        df = sig.to_dataframe(time_index=True)
+        recovered = Signal.from_pandas(df, column="amplitude")
+        assert recovered.sample_rate == sig.sample_rate
+        np.testing.assert_array_almost_equal(recovered.data, sig.data)
+
+    def test_time_index_named(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=10)
+        df = sig.to_dataframe(time_index=True)
+        assert df.index.name == "time"
+        np.testing.assert_array_almost_equal(df.index.to_numpy(), sig.time_axis)
+
+
+class TestToNumpy:
+    def test_default_returns_samples(self):
+        sig = Signal(np.array([0.5, -0.5, 0.25]), sample_rate=10)
+        arr = sig.to_numpy()
+        assert arr.ndim == 1
+        np.testing.assert_array_almost_equal(arr, sig.data)
+
+    def test_default_is_a_copy(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=10)
+        arr = sig.to_numpy()
+        arr[0] = 999.0
+        assert sig.data[0] == 1.0
+
+    def test_copy_false_returns_view(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=10)
+        arr = sig.to_numpy(copy=False)
+        assert arr is sig.data
+
+    def test_include_time_shape(self):
+        sig = Signal(np.array([0.5, -0.5, 0.25]), sample_rate=10)
+        arr = sig.to_numpy(include_time=True)
+        assert arr.shape == (3, 2)
+        np.testing.assert_array_almost_equal(arr[:, 0], sig.time_axis)
+        np.testing.assert_array_almost_equal(arr[:, 1], sig.data)
+
+    def test_roundtrip_through_from_numpy(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        arr = sig.to_numpy(include_time=True)
+        recovered = Signal.from_numpy(arr, sample_rate=sig.sample_rate, column=1)
+        np.testing.assert_array_almost_equal(recovered.data, sig.data)
+
+
 class TestTimeAxis:
     def test_length_matches_signal(self):
         sig = Signal.sine(440, duration=0.5, sample_rate=8000)
@@ -682,7 +750,8 @@ class TestConcat:
 
 
 class TestAmplitudeProperties:
-    """Tests for Signal.rms, Signal.rms_db, and Signal.peak_db."""
+    """Tests for Signal.rms, Signal.rms_db, Signal.power, Signal.power_db,
+    and Signal.peak_db."""
 
     def test_rms_full_scale_sine(self):
         sig = Signal.sine(440, duration=1.0, sample_rate=44100, amplitude=1.0)
@@ -704,6 +773,36 @@ class TestAmplitudeProperties:
     def test_rms_db_zero_signal(self):
         sig = Signal(np.zeros(100), sample_rate=100)
         assert sig.rms_db == float("-inf")
+
+    def test_power_full_scale_sine(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=44100, amplitude=1.0)
+        # Power of a sine = (1/√2)² = 0.5
+        assert sig.power == pytest.approx(0.5, rel=1e-3)
+
+    def test_power_constant_signal(self):
+        sig = Signal(np.full(100, 2.0), sample_rate=100)
+        assert sig.power == pytest.approx(4.0)
+
+    def test_power_zero_signal(self):
+        sig = Signal(np.zeros(100), sample_rate=100)
+        assert sig.power == pytest.approx(0.0)
+
+    def test_power_is_rms_squared(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=44100, amplitude=0.7)
+        assert sig.power == pytest.approx(sig.rms**2)
+
+    def test_power_db_full_scale_sine(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=44100, amplitude=1.0)
+        # Power = 0.5 → 10*log10(0.5) ≈ -3.0103 dB
+        assert sig.power_db == pytest.approx(-3.0103, abs=0.05)
+
+    def test_power_db_equals_rms_db(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=44100, amplitude=0.7)
+        assert sig.power_db == pytest.approx(sig.rms_db)
+
+    def test_power_db_zero_signal(self):
+        sig = Signal(np.zeros(100), sample_rate=100)
+        assert sig.power_db == float("-inf")
 
     def test_peak_db_unit_amplitude(self):
         sig = Signal(np.array([1.0, -0.5, 0.2]), sample_rate=3)
@@ -890,3 +989,304 @@ class TestSpectrumToSignal:
         sig = Signal.sine(440, duration=1.0, sample_rate=8000)
         reconstructed = sig.fft().to_signal(8000)
         assert reconstructed.fft().peak_frequency == pytest.approx(440, abs=2)
+
+
+class TestWindow:
+    """Tests for Signal.window() (applying a taper)."""
+
+    def test_window_tapers_ends_to_zero(self):
+        sig = Signal(np.ones(1000), sample_rate=1000)
+        out = sig.window("hann")
+        assert out.data[0] == pytest.approx(0.0, abs=1e-9)
+        assert out.data[-1] == pytest.approx(0.0, abs=1e-9)
+
+    def test_window_preserves_length_and_rate(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        out = sig.window("hamming")
+        assert len(out) == len(sig)
+        assert out.sample_rate == 8000
+
+    def test_window_returns_new_signal(self):
+        sig = Signal(np.ones(10), sample_rate=10)
+        assert sig.window() is not sig
+
+    def test_window_default_is_hann(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        np.testing.assert_array_equal(sig.window().data, sig.window("hann").data)
+
+    @pytest.mark.parametrize("win", ["hann", "hamming", "blackman", "bartlett"])
+    def test_all_windows_run(self, win):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        assert isinstance(sig.window(win), Signal)
+
+    def test_window_case_insensitive(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        assert isinstance(sig.window("HANN"), Signal)
+
+    def test_unknown_window_raises(self):
+        sig = Signal.sine(440, duration=0.1, sample_rate=8000)
+        with pytest.raises(ValueError, match="Unknown window"):
+            sig.window("kaiser")
+
+    def test_window_then_fft_preserves_peak_frequency(self):
+        """sig.window(w).fft() peaks at the same frequency as fft(window=w)."""
+        sig = Signal.sine(440, duration=1.0, sample_rate=8000)
+        assert sig.window("hann").fft().peak_frequency == pytest.approx(440, abs=2)
+
+    def test_window_then_fft_is_not_amplitude_equivalent(self):
+        """window().fft() lacks the coherent-gain correction that fft(window=)
+        applies, so its magnitude is scaled down by the window's mean (~0.5 for
+        Hann). This guards against re-introducing a false 'equivalence' claim."""
+        sig = Signal.sine(440, duration=1.0, sample_rate=8000, amplitude=1.0)
+        corrected = sig.fft(window="hann").peak_magnitude
+        plain = sig.window("hann").fft().peak_magnitude
+        w = np.hanning(len(sig))
+        assert plain == pytest.approx(corrected * w.mean(), rel=1e-3)
+        assert corrected == pytest.approx(1.0, abs=0.05)
+
+
+class TestConvolve:
+    """Tests for Signal.convolve()."""
+
+    def test_matches_numpy_full(self):
+        sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=3)
+        kernel = np.array([0.0, 1.0, 0.5])
+        out = sig.convolve(kernel, mode="full")
+        np.testing.assert_array_almost_equal(
+            out.data, np.convolve([1.0, 2.0, 3.0], [0.0, 1.0, 0.5], mode="full")
+        )
+
+    def test_same_mode_preserves_length(self):
+        sig = Signal(np.arange(10, dtype=float), sample_rate=10)
+        out = sig.convolve(np.ones(3) / 3, mode="same")
+        assert len(out) == len(sig)
+
+    def test_full_mode_length(self):
+        sig = Signal(np.ones(5), sample_rate=5)
+        out = sig.convolve(np.ones(3), mode="full")
+        assert len(out) == 5 + 3 - 1
+
+    def test_moving_average_smooths(self):
+        sig = Signal(np.array([0.0, 10.0, 0.0, 10.0, 0.0]), sample_rate=5)
+        out = sig.convolve(np.ones(3) / 3, mode="same")
+        # The smoothed signal should have lower peak-to-peak spread
+        assert np.ptp(out.data) < np.ptp(sig.data)
+
+    def test_accepts_signal_argument(self):
+        a = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=4)
+        b = Signal(np.array([1.0, 0.0]), sample_rate=4)
+        out = a.convolve(b)
+        assert isinstance(out, Signal)
+        assert out.sample_rate == 4
+
+    def test_preserves_sample_rate(self):
+        sig = Signal(np.ones(5), sample_rate=8000)
+        assert sig.convolve(np.ones(3)).sample_rate == 8000
+
+    def test_mismatched_sample_rate_raises(self):
+        a = Signal(np.ones(5), sample_rate=8000)
+        b = Signal(np.ones(3), sample_rate=44100)
+        with pytest.raises(ValueError, match="sample rate"):
+            a.convolve(b)
+
+    def test_non_1d_kernel_raises(self):
+        sig = Signal(np.ones(5), sample_rate=5)
+        with pytest.raises(ValueError, match="1-D"):
+            sig.convolve(np.ones((3, 3)))
+
+
+class TestCorrelate:
+    """Tests for Signal.correlate() and Signal.time_delay()."""
+
+    def test_correlate_returns_signal(self):
+        a = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=3)
+        b = Signal(np.array([0.0, 1.0, 0.5]), sample_rate=3)
+        assert isinstance(a.correlate(b), Signal)
+
+    def test_correlate_full_length(self):
+        a = Signal(np.ones(5), sample_rate=5)
+        b = Signal(np.ones(3), sample_rate=5)
+        assert len(a.correlate(b)) == 5 + 3 - 1
+
+    def test_correlate_matches_scipy(self):
+        from scipy.signal import correlate as sp_correlate
+
+        a = Signal(np.array([1.0, 2.0, 3.0, 4.0]), sample_rate=4)
+        b = Signal(np.array([0.0, 1.0, 0.5]), sample_rate=4)
+        np.testing.assert_array_almost_equal(
+            a.correlate(b).data, sp_correlate(a.data, b.data, mode="full")
+        )
+
+    def test_time_delay_positive_when_self_lags(self):
+        sr = 1000
+        rng = np.random.default_rng(0)
+        base = rng.standard_normal(500)
+        delayed = np.concatenate([np.zeros(100), base[:-100]])  # 0.1 s later
+        a = Signal(delayed, sample_rate=sr)
+        b = Signal(base, sample_rate=sr)
+        assert a.time_delay(b) == pytest.approx(0.1, abs=1e-6)
+
+    def test_time_delay_sign_is_antisymmetric(self):
+        sr = 1000
+        rng = np.random.default_rng(1)
+        base = rng.standard_normal(500)
+        delayed = np.concatenate([np.zeros(50), base[:-50]])
+        a = Signal(delayed, sample_rate=sr)
+        b = Signal(base, sample_rate=sr)
+        assert a.time_delay(b) == pytest.approx(-b.time_delay(a))
+
+    def test_time_delay_identical_signals_is_zero(self):
+        sig = Signal.noise(duration=0.5, sample_rate=1000, seed=7)
+        assert sig.time_delay(sig) == pytest.approx(0.0)
+
+    def test_time_delay_accepts_array(self):
+        sr = 1000
+        rng = np.random.default_rng(2)
+        base = rng.standard_normal(300)
+        a = Signal(np.concatenate([np.zeros(30), base[:-30]]), sample_rate=sr)
+        assert a.time_delay(base) == pytest.approx(0.03, abs=1e-6)
+
+    def test_mismatched_sample_rate_raises(self):
+        a = Signal(np.ones(5), sample_rate=8000)
+        b = Signal(np.ones(3), sample_rate=44100)
+        with pytest.raises(ValueError, match="sample rate"):
+            a.time_delay(b)
+
+
+class TestFindPeaks:
+    def test_finds_peak_times(self):
+        # Three pulses at 0.1 s, 0.3 s and 0.6 s
+        sr = 1000
+        data = np.zeros(1000)
+        data[[100, 300, 600]] = 1.0
+        sig = Signal(data, sample_rate=sr)
+        peaks = sig.find_peaks()
+        np.testing.assert_allclose(peaks.times, [0.1, 0.3, 0.6])
+
+    def test_reports_peak_heights(self):
+        sr = 1000
+        data = np.zeros(500)
+        data[100] = 0.8
+        data[300] = 0.4
+        sig = Signal(data, sample_rate=sr)
+        peaks = sig.find_peaks()
+        np.testing.assert_allclose(peaks.times, [0.1, 0.3])
+        np.testing.assert_allclose(peaks.heights, [0.8, 0.4])
+
+    def test_result_unpacks_and_has_length(self):
+        sr = 1000
+        data = np.zeros(500)
+        data[[100, 300]] = 1.0
+        sig = Signal(data, sample_rate=sr)
+        result = sig.find_peaks()
+        assert len(result) == 2
+        times, heights = result
+        np.testing.assert_allclose(times, [0.1, 0.3])
+        np.testing.assert_allclose(heights, [1.0, 1.0])
+
+    def test_min_height_filters_small_peaks(self):
+        sr = 1000
+        data = np.zeros(500)
+        data[100] = 1.0
+        data[300] = 0.2  # below threshold
+        sig = Signal(data, sample_rate=sr)
+        peaks = sig.find_peaks(min_height=0.5)
+        np.testing.assert_allclose(peaks.times, [0.1])
+
+    def test_min_distance_merges_close_peaks(self):
+        sr = 1000
+        data = np.zeros(500)
+        data[100] = 1.0
+        data[110] = 0.9  # 0.01 s after the first, lower
+        sig = Signal(data, sample_rate=sr)
+        # Without a distance constraint, both are returned.
+        assert len(sig.find_peaks()) == 2
+        # With a 0.05 s minimum spacing, only the taller one survives.
+        peaks = sig.find_peaks(min_distance=0.05)
+        np.testing.assert_allclose(peaks.times, [0.1])
+
+    def test_returns_empty_for_flat_signal(self):
+        sig = Signal(np.zeros(100), sample_rate=100)
+        peaks = sig.find_peaks()
+        assert len(peaks) == 0
+        assert len(peaks.times) == 0
+        assert len(peaks.heights) == 0
+
+    def test_negative_min_distance_raises(self):
+        sig = Signal(np.zeros(100), sample_rate=100)
+        with pytest.raises(ValueError, match="non-negative"):
+            sig.find_peaks(min_distance=-0.1)
+
+
+class TestSpectrogram:
+    """Tests for Signal.spectrogram() and the Spectrogram class."""
+
+    def test_returns_spectrogram(self):
+        sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
+        assert isinstance(sig.spectrogram(), Spectrogram)
+
+    def test_shape_consistency(self):
+        sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
+        spec = sig.spectrogram(segment_length=256)
+        assert spec.magnitudes.shape == (len(spec.frequencies), len(spec.times))
+        assert spec.shape == spec.magnitudes.shape
+        assert len(spec) == len(spec.times)
+
+    def test_frequency_axis_spans_to_nyquist(self):
+        sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
+        spec = sig.spectrogram()
+        assert spec.frequencies[0] == pytest.approx(0.0)
+        assert spec.frequencies[-1] == pytest.approx(4000.0)
+
+    def test_detects_tone_frequency(self):
+        sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
+        spec = sig.spectrogram(segment_length=512)
+        dominant = np.median(spec.peak_frequency_over_time())
+        assert dominant == pytest.approx(1000, abs=20)
+
+    def test_magnitude_scaling_matches_fft_convention(self):
+        """A unit-amplitude sine should read magnitude ~1 (like Signal.fft)."""
+        sig = Signal.sine(1000, duration=1.0, sample_rate=8000, amplitude=1.0)
+        spec = sig.spectrogram(segment_length=512)
+        assert float(spec.magnitudes.max()) == pytest.approx(1.0, abs=0.1)
+
+    def test_tracks_chirp_upward(self):
+        """A rising chirp's dominant frequency should increase over time."""
+        sig = Signal.from_function(
+            lambda t: np.sin(2 * np.pi * (200 + 800 * t) * t),
+            duration=2.0,
+            sample_rate=8000,
+        )
+        pf = sig.spectrogram(segment_length=256).peak_frequency_over_time()
+        # Compare the average of the first quarter to the last quarter
+        q = len(pf) // 4
+        assert pf[:q].mean() < pf[-q:].mean()
+
+    def test_segment_longer_than_signal_is_clamped(self):
+        sig = Signal.sine(1000, duration=0.01, sample_rate=8000)  # 80 samples
+        spec = sig.spectrogram(segment_length=1024)
+        assert isinstance(spec, Spectrogram)
+
+    def test_unknown_window_raises(self):
+        sig = Signal.sine(1000, duration=0.1, sample_rate=8000)
+        with pytest.raises(ValueError, match="Unknown window"):
+            sig.spectrogram(window="kaiser")
+
+    @pytest.mark.parametrize("bad_overlap", [-0.1, 1.0, 1.5])
+    def test_invalid_overlap_raises(self, bad_overlap):
+        sig = Signal.sine(1000, duration=0.1, sample_rate=8000)
+        with pytest.raises(ValueError, match="overlap"):
+            sig.spectrogram(overlap=bad_overlap)
+
+    def test_shape_mismatch_raises(self):
+        with pytest.raises(ValueError, match="shape"):
+            Spectrogram(
+                frequencies=np.array([0.0, 1.0]),
+                times=np.array([0.0, 1.0, 2.0]),
+                magnitudes=np.zeros((2, 2)),  # wrong: should be (2, 3)
+            )
+
+    def test_repr(self):
+        sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
+        text = repr(sig.spectrogram())
+        assert "Spectrogram" in text and "Hz" in text
