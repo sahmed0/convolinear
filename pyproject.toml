@@ -43,7 +43,6 @@ dependencies = [
 plot   = ["matplotlib>=3.4.0"]
 pandas = ["pandas>=2.0", "pyarrow>=14.0"]
 audio = ["soundfile>=0.13.0"]
-dev    = ["pytest>=7.0", "matplotlib>=3.4", "pandas>=2.0", "pyarrow>=14.0", "soundfile>=0.13.0"]
 
 [project.urls]
 Homepage   = "https://github.com/sahmed0/convolinear#readme"
@@ -51,13 +50,38 @@ Repository = "https://github.com/sahmed0/convolinear"
 Issues     = "https://github.com/sahmed0/convolinear/issues"
 
 [dependency-groups]
-# The default group `uv sync` installs. Mirror the full test toolchain from
-# [project.optional-dependencies].dev so `uv run pytest` has every library the
-# suite imports (matplotlib, pandas, pyarrow, soundfile) - not just pytest.
 dev = [
     "pytest>=9.0.3",
+    "pytest-cov>=6.0",
+    "hypothesis>=6.100",
+    "ruff>=0.8",
+    "mypy>=1.14",
+    "scipy-stubs>=1.14",
+    "pandas-stubs>=2.0",
     "matplotlib>=3.4",
     "pandas>=2.0",
     "pyarrow>=14.0",
     "soundfile>=0.13.0",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
+    "mkdocs-jupyter>=0.25",
+    "pooch>=1.8",        # scipy.datasets backend for the ECG notebook
+]
+bench = [
+    "pytest-benchmark>=5.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "NPY", "RUF"]
+
+[tool.coverage.run]
+source = ["convolinear"]
