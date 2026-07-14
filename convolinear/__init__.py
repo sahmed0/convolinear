@@ -1,8 +1,11 @@
-"""convolinear - A fluent time-series and signal processing library for building data pipelines in a single line of Python."""
+"""convolinear - A fluent time-series and signal processing library.
 
-from .signal import Signal, PeakResult
-from .spectrum import Spectrum
+Build data pipelines in a single line of Python.
+"""
+
+from .signal import PeakResult, Signal
 from .spectrogram import Spectrogram
+from .spectrum import Spectrum
 
 __version__ = "0.2.0"
-__all__ = ["Signal", "PeakResult", "Spectrum", "Spectrogram"]
+__all__ = ["PeakResult", "Signal", "Spectrogram", "Spectrum"]

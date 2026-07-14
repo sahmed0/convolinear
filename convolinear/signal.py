@@ -1,11 +1,14 @@
 """Core Signal class for time-domain signal manipulation."""
 
 from __future__ import annotations
+
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Callable, Iterator, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
+
 import numpy as np
 from scipy import signal as scipy_signal
-from scipy.io import wavfile, loadmat
+from scipy.io import loadmat, wavfile
 
 
 @dataclass(frozen=True)
@@ -34,8 +37,8 @@ class PeakResult:
 # imports Spectrum/Spectrogram only at type-check time so fft()/spectrogram()
 # don't create a circular import
 if TYPE_CHECKING:
-    from .spectrum import Spectrum
     from .spectrogram import Spectrogram
+    from .spectrum import Spectrum
 
 
 class Signal:
@@ -65,7 +68,7 @@ class Signal:
     # --- Constructors ---
 
     @classmethod
-    def from_wav(cls, path: str) -> "Signal":
+    def from_wav(cls, path: str) -> Signal:
         """Load a signal from a WAV file. Stereo files are converted to mono."""
         sample_rate, raw = wavfile.read(path)
         original_dtype = raw.dtype
@@ -77,7 +80,7 @@ class Signal:
         return cls(data, sample_rate)
 
     @classmethod
-    def from_audio(cls, path: str) -> "Signal":
+    def from_audio(cls, path: str) -> Signal:
         """Load a signal from an audio file (WAV,FLAC, MP3, OGG, and others)."""
         try:
             import soundfile as sf
@@ -86,7 +89,7 @@ class Signal:
                 "from_audio() requires the 'soundfile' package. "
                 "Install it with: pip install soundfile "
                 "MP3 support depends on libsndfile being compiled with MP3 support. "
-            )
+            ) from None
         data, sample_rate = sf.read(path)
         data = data.astype(np.float64)
         if data.ndim > 1:
@@ -97,8 +100,8 @@ class Signal:
     def _rate_from_dataframe(
         cls,
         df,
-        time_column: Optional[str],
-        sample_rate: Optional[int],
+        time_column: str | None,
+        sample_rate: int | None,
     ) -> int:
         """Shared logic for inferring sample rate from Dataframe time column."""
 
@@ -142,8 +145,7 @@ class Signal:
         intervals = np.diff(elapsed)
         if np.any(intervals <= 0):
             raise ValueError(
-                "Timestamps must be strictly increasing. "
-                "Sort the data by time before loading."
+                "Timestamps must be strictly increasing. Sort the data by time before loading."
             )
 
         median_interval = float(np.median(intervals))
@@ -155,10 +157,10 @@ class Signal:
         cls,
         path: str,
         value_column: str,
-        time_column: Optional[str] = None,
-        sample_rate: Optional[int] = None,
+        time_column: str | None = None,
+        sample_rate: int | None = None,
         **pandas_kwargs,
-    ) -> "Signal":
+    ) -> Signal:
         """Load a signal from a CSV file.
 
         You must provide either a ``time_column`` (and the sample rate will be
@@ -191,17 +193,14 @@ class Signal:
             import pandas as pd
         except ImportError:
             raise ImportError(
-                "Reading CSV files requires pandas. "
-                "Install it with: pip install pandas "
-            )
+                "Reading CSV files requires pandas. Install it with: pip install pandas "
+            ) from None
 
         df = pd.read_csv(path, **pandas_kwargs)
 
         if value_column not in df.columns:
             available = ", ".join(df.columns.tolist())
-            raise ValueError(
-                f"Column '{value_column}' not found. Available columns: {available}"
-            )
+            raise ValueError(f"Column '{value_column}' not found. Available columns: {available}")
 
         data = df[value_column].to_numpy(dtype=np.float64)
 
@@ -213,10 +212,10 @@ class Signal:
         cls,
         path: str,
         value_column: str,
-        time_column: Optional[str] = None,
-        sample_rate: Optional[int] = None,
+        time_column: str | None = None,
+        sample_rate: int | None = None,
         **pandas_kwargs,
-    ) -> "Signal":
+    ) -> Signal:
         """Load a signal from a Parquet file.
 
         You must provide either a ``time_column`` (and the sample rate will be
@@ -251,15 +250,13 @@ class Signal:
             raise ImportError(
                 "Reading parquet files requires pandas and pyarrow. "
                 "Install them with: pip install pandas pyarrow "
-            )
+            ) from None
 
         df = pd.read_parquet(path, **pandas_kwargs)
 
         if value_column not in df.columns:
             available = ", ".join(df.columns.tolist())
-            raise ValueError(
-                f"Column '{value_column}' not found. Available columns: {available}"
-            )
+            raise ValueError(f"Column '{value_column}' not found. Available columns: {available}")
 
         data = df[value_column].to_numpy(dtype=np.float64)
 
@@ -269,10 +266,10 @@ class Signal:
     @classmethod
     def from_numpy(
         cls,
-        array: Union[np.ndarray, str],
+        array: np.ndarray | str,
         sample_rate: int,
-        column: Optional[int] = None,
-    ) -> "Signal":
+        column: int | None = None,
+    ) -> Signal:
         """Load a signal from a NumPy array or a .npy / .npz file.
 
         Args:
@@ -313,8 +310,7 @@ class Signal:
             col = column if column is not None else 0
             if col >= array.shape[1]:
                 raise ValueError(
-                    f"Column index {col} is out of range for array with "
-                    f"{array.shape[1]} columns."
+                    f"Column index {col} is out of range for array with {array.shape[1]} columns."
                 )
             array = array[:, col]
         elif array.ndim != 1:
@@ -326,9 +322,9 @@ class Signal:
     def from_pandas(
         cls,
         series_or_df,
-        sample_rate: Optional[int] = None,
-        column: Optional[str] = None,
-    ) -> "Signal":
+        sample_rate: int | None = None,
+        column: str | None = None,
+    ) -> Signal:
         """Load a signal from a pandas Series or DataFrame.
 
         For a Series, values are used directly.
@@ -361,7 +357,7 @@ class Signal:
         except ImportError:
             raise ImportError(
                 "from_pandas requires pandas. Install it with: pip install pandas"
-            )
+            ) from None
 
         if isinstance(series_or_df, pd.DataFrame):
             if column is None:
@@ -402,19 +398,18 @@ class Signal:
             return cls(data, inferred_rate)
 
         raise ValueError(
-            "Could not infer sample rate from index. "
-            "Please provide an explicit 'sample_rate'."
+            "Could not infer sample rate from index. Please provide an explicit 'sample_rate'."
         )
 
     @classmethod
     def from_matlab(
         cls,
         path: str,
-        variable: Optional[str] = None,
-        sample_rate_variable: Optional[str] = None,
-        sample_rate: Optional[int] = None,
-        column: Optional[int] = None,
-    ) -> "Signal":
+        variable: str | None = None,
+        sample_rate_variable: str | None = None,
+        sample_rate: int | None = None,
+        column: int | None = None,
+    ) -> Signal:
         """Load a signal from a MATLAB .mat file.
 
         Supports MATLAB files up to v7.2 (the large majority of .mat files).
@@ -470,16 +465,13 @@ class Signal:
         if variable is not None:
             if variable not in mat:
                 raise ValueError(
-                    f"Variable '{variable}' not found. "
-                    f"Available variables: {', '.join(data_keys)}"
+                    f"Variable '{variable}' not found. Available variables: {', '.join(data_keys)}"
                 )
             array = np.asarray(mat[variable], dtype=np.float64).squeeze()
         else:
             # Auto-detect: find numeric arrays (exclude scalars / sample rate)
             numeric_keys = [
-                k
-                for k in data_keys
-                if isinstance(mat[k], np.ndarray) and mat[k].size > 1
+                k for k in data_keys if isinstance(mat[k], np.ndarray) and mat[k].size > 1
             ]
             if len(numeric_keys) == 0:
                 raise ValueError(
@@ -498,14 +490,12 @@ class Signal:
             col = column if column is not None else 0
             if col >= array.shape[1]:
                 raise ValueError(
-                    f"Column index {col} is out of range for array with "
-                    f"{array.shape[1]} columns."
+                    f"Column index {col} is out of range for array with {array.shape[1]} columns."
                 )
             array = array[:, col]
         elif array.ndim != 1:
             raise ValueError(
-                f"Expected a 1D or 2D array from the .mat file, "
-                f"got shape {array.shape}."
+                f"Expected a 1D or 2D array from the .mat file, got shape {array.shape}."
             )
 
         return cls(array, sample_rate)
@@ -516,7 +506,7 @@ class Signal:
         func: Callable[[np.ndarray], np.ndarray],
         duration: float,
         sample_rate: int = 44100,
-    ) -> "Signal":
+    ) -> Signal:
         """Generate a signal by sampling a function of time.
 
         Example:
@@ -535,7 +525,7 @@ class Signal:
         sample_rate: int = 44100,
         amplitude: float = 1.0,
         phase: float = 0.0,
-    ) -> "Signal":
+    ) -> Signal:
         """Generate a pure sine wave. Convenience constructor."""
         return cls.from_function(
             lambda t: amplitude * np.sin(2 * np.pi * frequency * t + phase),
@@ -549,8 +539,8 @@ class Signal:
         duration: float,
         sample_rate: int = 44100,
         amplitude: float = 1.0,
-        seed: Optional[int] = None,
-    ) -> "Signal":
+        seed: int | None = None,
+    ) -> Signal:
         """Generate white noise. Convenience constructor."""
         rng = np.random.default_rng(seed)
         n_samples = int(duration * sample_rate)
@@ -630,28 +620,28 @@ class Signal:
 
     # --- Transformations (each returns a new Signal) ---
 
-    def normalize(self) -> "Signal":
+    def normalize(self) -> Signal:
         """Scale the signal so its peak absolute value is 1.0."""
         peak = np.max(np.abs(self.data))
         if peak == 0:
             return Signal(self.data.copy(), self.sample_rate)
         return Signal(self.data / peak, self.sample_rate)
 
-    def trim(self, start: float = 0.0, end: Optional[float] = None) -> "Signal":
+    def trim(self, start: float = 0.0, end: float | None = None) -> Signal:
         """Cut the signal to a time range, in seconds."""
         start_idx = int(start * self.sample_rate)
         end_idx = int(end * self.sample_rate) if end is not None else len(self.data)
         return Signal(self.data[start_idx:end_idx], self.sample_rate)
 
-    def gain(self, factor: float) -> "Signal":
+    def gain(self, factor: float) -> Signal:
         """Multiply the signal by a constant (in linear scale)."""
         return Signal(self.data * factor, self.sample_rate)
 
-    def gain_db(self, db: float) -> "Signal":
+    def gain_db(self, db: float) -> Signal:
         """Apply gain in decibels. +6dB doubles amplitude, -6dB halves it."""
         return self.gain(10 ** (db / 20))
 
-    def __add__(self, other: "Signal") -> "Signal":
+    def __add__(self, other: Signal) -> Signal:
         """Mix two signals by adding their samples element-wise.
 
         If the signals differ in length, the shorter one is zero-padded.
@@ -672,7 +662,7 @@ class Signal:
         b = np.pad(other.data, (0, n - len(other.data)))
         return Signal(a + b, self.sample_rate)
 
-    def concat(self, other: "Signal") -> "Signal":
+    def concat(self, other: Signal) -> Signal:
         """Append another signal onto the end of this one.
 
         Use this to join signals end-to-end. To overlay (mix) two signals
@@ -693,7 +683,7 @@ class Signal:
             )
         return Signal(np.concatenate([self.data, other.data]), self.sample_rate)
 
-    def window(self, window: str = "hann") -> "Signal":
+    def window(self, window: str = "hann") -> Signal:
         """Apply a window function (taper) to the signal.
 
         Multiplies the signal by a window that smoothly falls to zero at both
@@ -725,27 +715,25 @@ class Signal:
         w = Signal._FFT_WINDOWS[key](len(self.data))
         return Signal(self.data * w, self.sample_rate)
 
-    def remove_dc(self) -> "Signal":
+    def remove_dc(self) -> Signal:
         """Remove the DC offset by subtracting the mean from every sample."""
         return Signal(self.data - np.mean(self.data), self.sample_rate)
 
-    def reverse(self) -> "Signal":
+    def reverse(self) -> Signal:
         """Flip the signal in time."""
         return Signal(self.data[::-1].copy(), self.sample_rate)
 
-    def clip(self, min_val: float = -1.0, max_val: float = 1.0) -> "Signal":
+    def clip(self, min_val: float = -1.0, max_val: float = 1.0) -> Signal:
         """Clamp all samples to the range [min_val, max_val].
 
         Raises:
             ValueError: if min_val >= max_val.
         """
         if min_val >= max_val:
-            raise ValueError(
-                f"min_val ({min_val}) must be less than max_val ({max_val})."
-            )
+            raise ValueError(f"min_val ({min_val}) must be less than max_val ({max_val}).")
         return Signal(np.clip(self.data, min_val, max_val), self.sample_rate)
 
-    def fade_in(self, duration: float) -> "Signal":
+    def fade_in(self, duration: float) -> Signal:
         """Apply a linear fade-in from 0 to 1 over ``duration`` seconds.
 
         The ramp is capped at the full signal length so oversized durations
@@ -758,7 +746,7 @@ class Signal:
         envelope[:n_fade] *= np.linspace(0.0, 1.0, n_fade)
         return Signal(envelope, self.sample_rate)
 
-    def fade_out(self, duration: float) -> "Signal":
+    def fade_out(self, duration: float) -> Signal:
         """Apply a linear fade-out from 1 to 0 over ``duration`` seconds.
 
         The ramp is capped at the full signal length so oversized durations
@@ -771,19 +759,19 @@ class Signal:
         envelope[-n_fade:] *= np.linspace(1.0, 0.0, n_fade)
         return Signal(envelope, self.sample_rate)
 
-    def lowpass(self, cutoff: float, order: int = 4) -> "Signal":
+    def lowpass(self, cutoff: float, order: int = 4) -> Signal:
         """Apply a Butterworth low-pass filter. Cutoff in Hz."""
         return self._butter_filter(cutoff, order, btype="low")
 
-    def highpass(self, cutoff: float, order: int = 4) -> "Signal":
+    def highpass(self, cutoff: float, order: int = 4) -> Signal:
         """Apply a Butterworth high-pass filter. Cutoff in Hz."""
         return self._butter_filter(cutoff, order, btype="high")
 
-    def bandpass(self, low: float, high: float, order: int = 4) -> "Signal":
+    def bandpass(self, low: float, high: float, order: int = 4) -> Signal:
         """Apply a Butterworth band-pass filter. Frequencies in Hz."""
         return self._butter_filter([low, high], order, btype="band")
 
-    def bandstop(self, low: float, high: float, order: int = 4) -> "Signal":
+    def bandstop(self, low: float, high: float, order: int = 4) -> Signal:
         """Apply a Butterworth band-stop (notch) filter. Frequencies in Hz.
 
         Attenuates the band between ``low`` and ``high`` Hz and passes
@@ -794,9 +782,7 @@ class Signal:
         """
         return self._butter_filter([low, high], order, btype="bandstop")
 
-    def _butter_filter(
-        self, cutoff: Union[float, list], order: int, btype: str
-    ) -> "Signal":
+    def _butter_filter(self, cutoff: float | list, order: int, btype: str) -> Signal:
         nyquist = self.sample_rate / 2
         normalized = np.asarray(cutoff) / nyquist
         if np.any(normalized >= 1) or np.any(normalized <= 0):
@@ -808,13 +794,13 @@ class Signal:
         filtered = scipy_signal.sosfiltfilt(sos, self.data)
         return Signal(filtered, self.sample_rate)
 
-    def resample(self, new_sample_rate: int) -> "Signal":
+    def resample(self, new_sample_rate: int) -> Signal:
         """Resample the signal to a new sample rate."""
         new_n = int(len(self.data) * new_sample_rate / self.sample_rate)
         resampled = np.asarray(scipy_signal.resample(self.data, new_n))
         return Signal(resampled, new_sample_rate)
 
-    def _coerce_other(self, other: Union["Signal", np.ndarray], op: str) -> np.ndarray:
+    def _coerce_other(self, other: Signal | np.ndarray, op: str) -> np.ndarray:
         """Return the sample array of ``other`` for a two-signal operation.
 
         Accepts either another Signal (whose sample rate must match) or a raw
@@ -829,14 +815,10 @@ class Signal:
             return other.data
         arr = np.asarray(other, dtype=np.float64)
         if arr.ndim != 1:
-            raise ValueError(
-                f"Expected a Signal or 1-D array for {op}, got shape {arr.shape}."
-            )
+            raise ValueError(f"Expected a Signal or 1-D array for {op}, got shape {arr.shape}.")
         return arr
 
-    def convolve(
-        self, other: Union["Signal", np.ndarray], mode: str = "full"
-    ) -> "Signal":
+    def convolve(self, other: Signal | np.ndarray, mode: str = "full") -> Signal:
         """Convolve this signal with another signal or a kernel.
 
         Convolution is the operation behind FIR filtering: passing a kernel
@@ -867,9 +849,7 @@ class Signal:
         result = scipy_signal.fftconvolve(self.data, kernel, mode=mode)
         return Signal(np.asarray(result), self.sample_rate)
 
-    def correlate(
-        self, other: Union["Signal", np.ndarray], mode: str = "full"
-    ) -> "Signal":
+    def correlate(self, other: Signal | np.ndarray, mode: str = "full") -> Signal:
         """Cross-correlate this signal with another signal or array.
 
         Cross-correlation measures how similar two signals are as one is slid
@@ -891,7 +871,7 @@ class Signal:
         result = scipy_signal.correlate(self.data, other_data, mode=mode)
         return Signal(np.asarray(result), self.sample_rate)
 
-    def time_delay(self, other: Union["Signal", np.ndarray]) -> float:
+    def time_delay(self, other: Signal | np.ndarray) -> float:
         """Estimate the time delay (in seconds) between this signal and ``other``.
 
         Finds the lag of the cross-correlation peak and converts it to seconds.
@@ -910,16 +890,14 @@ class Signal:
         """
         other_data = self._coerce_other(other, "time_delay")
         corr = scipy_signal.correlate(self.data, other_data, mode="full")
-        lags = scipy_signal.correlation_lags(
-            len(self.data), len(other_data), mode="full"
-        )
+        lags = scipy_signal.correlation_lags(len(self.data), len(other_data), mode="full")
         lag = int(lags[np.argmax(corr)])
         return lag / self.sample_rate
 
     def find_peaks(
         self,
-        min_height: Optional[float] = None,
-        min_distance: Optional[float] = None,
+        min_height: float | None = None,
+        min_distance: float | None = None,
     ) -> PeakResult:
         """Find local maxima (peaks) in the signal.
 
@@ -952,18 +930,14 @@ class Signal:
         distance = None
         if min_distance is not None:
             if min_distance < 0:
-                raise ValueError(
-                    f"min_distance must be non-negative, got {min_distance}."
-                )
+                raise ValueError(f"min_distance must be non-negative, got {min_distance}.")
             # scipy expects the distance in samples and requires it to be >= 1.
             distance = max(1, round(min_distance * self.sample_rate))
 
-        indices, _ = scipy_signal.find_peaks(
-            self.data, height=min_height, distance=distance
-        )
+        indices, _ = scipy_signal.find_peaks(self.data, height=min_height, distance=distance)
         return PeakResult(indices / self.sample_rate, self.data[indices])
 
-    _FFT_WINDOWS = {
+    _FFT_WINDOWS: ClassVar[dict[str, Callable[[int], np.ndarray]]] = {
         "hann": np.hanning,
         "hamming": np.hamming,
         "blackman": np.blackman,
@@ -981,13 +955,12 @@ class Signal:
         key = window.lower()
         if key not in cls._FFT_WINDOWS:
             raise ValueError(
-                f"Unknown window '{window}'. "
-                f"Choose from: {', '.join(cls._FFT_WINDOWS)}."
+                f"Unknown window '{window}'. Choose from: {', '.join(cls._FFT_WINDOWS)}."
             )
         return key
 
     # NOTE: Spectrum doesn't need quotes due to if TYPE_CHECKING import
-    def fft(self, window: Optional[str] = None) -> Spectrum:
+    def fft(self, window: str | None = None) -> Spectrum:
         """Convert to the frequency domain via FFT.
 
         Args:
@@ -1072,9 +1045,7 @@ class Signal:
         if not 0.0 <= overlap < 1.0:
             raise ValueError(f"overlap must be in [0, 1), got {overlap}.")
         if int(segment_length) < 1:
-            raise ValueError(
-                f"segment_length must be a positive integer, got {segment_length}."
-            )
+            raise ValueError(f"segment_length must be a positive integer, got {segment_length}.")
         if len(self.data) == 0:
             raise ValueError("Cannot compute a spectrogram of an empty signal.")
 
@@ -1102,7 +1073,7 @@ class Signal:
 
     # --- Input/Output & visualisation ---
 
-    def to_wav(self, path: str) -> "Signal":
+    def to_wav(self, path: str) -> Signal:
         """Save the signal as a 16-bit WAV file. Returns self for chaining."""
         # Clip to [-1, 1] and convert to int16
         clipped = np.clip(self.data, -1.0, 1.0)
@@ -1146,7 +1117,7 @@ class Signal:
     def to_dataframe(
         self,
         value_column: str = "amplitude",
-        time_column: Optional[str] = "time",
+        time_column: str | None = "time",
         time_index: bool = False,
     ):
         """Export the signal to a pandas DataFrame for further analysis.
@@ -1188,7 +1159,7 @@ class Signal:
         except ImportError:
             raise ImportError(
                 "to_dataframe requires pandas. Install it with: pip install pandas"
-            )
+            ) from None
 
         if time_index:
             return pd.DataFrame(
@@ -1204,9 +1175,9 @@ class Signal:
 
     def plot(
         self,
-        title: Optional[str] = None,
-        xlabel: Optional[str] = None,
-        ylabel: Optional[str] = None,
+        title: str | None = None,
+        xlabel: str | None = None,
+        ylabel: str | None = None,
         ax=None,
     ):
         """Plot the signal in the time domain. Returns the matplotlib axis."""

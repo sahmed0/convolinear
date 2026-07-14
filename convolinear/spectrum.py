@@ -1,8 +1,13 @@
 """Spectrum class for frequency-domain signal representations."""
 
 from __future__ import annotations
-from typing import Optional
+
+from typing import TYPE_CHECKING
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from .signal import Signal
 
 
 def _limit_to_max_freq(frequencies, values, max_freq):
@@ -60,12 +65,12 @@ class Spectrum:
         idx = np.argsort(self.magnitudes)[::-1][:n]
         return [(float(self.frequencies[i]), float(self.magnitudes[i])) for i in idx]
 
-    def in_range(self, low: float, high: float) -> "Spectrum":
+    def in_range(self, low: float, high: float) -> Spectrum:
         """Return a new Spectrum containing only frequencies in [low, high] Hz."""
         mask = (self.frequencies >= low) & (self.frequencies <= high)
         return Spectrum(self.magnitudes[mask], self.frequencies[mask])
 
-    def to_signal(self, sample_rate: int) -> "Signal":
+    def to_signal(self, sample_rate: int) -> Signal:
         """Reconstruct a time-domain signal via inverse FFT.
 
         Because this Spectrum stores only magnitudes (no phase information),
@@ -104,10 +109,8 @@ class Spectrum:
         # full transform length - which also recovers odd original lengths.
         df = float(self.frequencies[1] - self.frequencies[0])
         if df <= 0:
-            raise ValueError(
-                "Spectrum frequencies must be evenly spaced and increasing."
-            )
-        n_full = int(round(sample_rate / df))
+            raise ValueError("Spectrum frequencies must be evenly spaced and increasing.")
+        n_full = round(sample_rate / df)
         if n_full < 2:
             raise ValueError(
                 f"sample_rate {sample_rate} Hz is too low for this Spectrum's "
@@ -132,11 +135,11 @@ class Spectrum:
 
     def plot(
         self,
-        title: Optional[str] = None,
-        xlabel: Optional[str] = None,
-        ylabel: Optional[str] = None,
+        title: str | None = None,
+        xlabel: str | None = None,
+        ylabel: str | None = None,
         log_scale: bool = False,
-        max_freq: Optional[float] = None,
+        max_freq: float | None = None,
         ax=None,
     ):
         """Plot the magnitude spectrum. Returns the matplotlib axis."""

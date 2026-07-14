@@ -1,7 +1,7 @@
 """Spectrogram class for time-frequency signal representations."""
 
 from __future__ import annotations
-from typing import Optional
+
 import numpy as np
 
 
@@ -62,10 +62,10 @@ class Spectrogram:
 
     def plot(
         self,
-        title: Optional[str] = None,
-        xlabel: Optional[str] = None,
-        ylabel: Optional[str] = None,
-        max_freq: Optional[float] = None,
+        title: str | None = None,
+        xlabel: str | None = None,
+        ylabel: str | None = None,
+        max_freq: float | None = None,
         db_scale: bool = True,
         colorbar: bool = True,
         cmap: str = "magma",

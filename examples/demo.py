@@ -4,6 +4,7 @@ Run with: python examples/demo.py
 """
 
 import matplotlib.pyplot as plt
+
 from convolinear import Signal
 
 
@@ -27,7 +28,7 @@ def main():
         print(f"  {freq:7.1f} Hz   magnitude {mag:.4f}")
 
     # 4. Plot everything
-    fig, axes = plt.subplots(3, 1, figsize=(10, 8))
+    _fig, axes = plt.subplots(3, 1, figsize=(10, 8))
     noisy.trim(0, 0.05).plot(title="Noisy signal (first 50 ms)", ax=axes[0])
     cleaned.trim(0, 0.05).plot(title="After bandpass filter (first 50 ms)", ax=axes[1])
     spectrum.plot(title="Spectrum of cleaned signal", max_freq=2000, ax=axes[2])
