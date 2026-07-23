@@ -356,13 +356,45 @@ class TestFromWav:
     def test_integer_normalization(self, tmp_path):
         from scipy.io import wavfile
 
-        # Max int16 value should normalize to 1.0
+        # Signed PCM divides by |min| (32768), so -32768 maps to exactly -1.0
+        # and +32767 lands just inside the range at 32767/32768.
         data = np.array([32767, -32768, 16384], dtype=np.int16)
         path = str(tmp_path / "int16.wav")
         wavfile.write(path, 44100, data)
         sig = Signal.from_wav(path)
-        assert sig.data[0] == pytest.approx(1.0, rel=1e-4)
-        assert sig.data[1] == pytest.approx(-1.0, rel=1e-4)
+        assert sig.data[0] == pytest.approx(32767 / 32768)
+        assert sig.data[1] == -1.0
+
+    def test_int16_wav_full_scale(self, tmp_path):
+        from scipy.io import wavfile
+
+        # Full-scale negative sample must reach exactly -1.0 (not below).
+        data = np.array([-32768, 0, 32767, -16384], dtype=np.int16)
+        path = str(tmp_path / "int16_full.wav")
+        wavfile.write(path, 44100, data)
+        sig = Signal.from_wav(path)
+        assert sig.data.min() == -1.0
+        assert np.all(sig.data >= -1.0)
+        assert np.all(sig.data <= 1.0)
+
+    def test_uint8_wav_decodes_offset_binary(self, tmp_path):
+        from scipy.io import wavfile
+
+        # 8-bit WAV is unsigned offset-binary (silence = 128). A sine mapped
+        # into [0, 255] must decode back centred on 0, not on 0.5.
+        t = np.arange(8000) / 8000
+        sine = np.sin(2 * np.pi * 200 * t)
+        raw = (sine * 127 + 128).astype(np.uint8)
+        path = str(tmp_path / "uint8.wav")
+        wavfile.write(path, 8000, raw)
+        sig = Signal.from_wav(path)
+
+        assert abs(sig.data.mean()) < 0.02
+        assert np.all(sig.data >= -1.0)
+        assert np.all(sig.data <= 1.0)
+        # A correct decode leaves no dominant DC bin.
+        spec = sig.fft()
+        assert spec.peak_frequency == pytest.approx(200, abs=2)
 
 
 class TestToWav:

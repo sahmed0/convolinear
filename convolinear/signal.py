@@ -75,8 +75,15 @@ class Signal:
         data = raw.astype(np.float64)
         if data.ndim > 1:
             data = data.mean(axis=1)  # average channels to mono
-        if np.issubdtype(original_dtype, np.integer):
-            data = data / np.iinfo(original_dtype).max
+        if np.issubdtype(original_dtype, np.unsignedinteger):
+            # 8-bit WAV is unsigned offset-binary: silence = 128, full scale = [0, 255].
+            info = np.iinfo(original_dtype)
+            half = (info.max + 1) / 2.0
+            data = (data - half) / half
+        elif np.issubdtype(original_dtype, np.integer):
+            # Divide by |min| (e.g. 32768), not max (32767): maps the full int range
+            # into [-1, 1) exactly, instead of pushing the minimum below -1.
+            data = data / -float(np.iinfo(original_dtype).min)
         return cls(data, sample_rate)
 
     @classmethod
