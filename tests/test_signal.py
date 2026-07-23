@@ -52,6 +52,32 @@ class TestSignalTransformations:
         assert len(trimmed) == 400
         assert trimmed.duration == pytest.approx(0.4)
 
+    def test_trim_rejects_negative_start(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=1000)
+        with pytest.raises(ValueError, match="non-negative"):
+            sig.trim(start=-0.1, end=0.5)
+
+    def test_trim_rejects_end_before_start(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=1000)
+        with pytest.raises(ValueError, match="must not be before start"):
+            sig.trim(start=0.6, end=0.2)
+
+    def test_trim_rejects_start_past_end_of_signal(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=1000)
+        with pytest.raises(ValueError, match="selects no samples"):
+            sig.trim(start=1.5)
+
+    def test_trim_caps_end_beyond_signal(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=1000)
+        trimmed = sig.trim(start=0.5, end=5.0)  # end well beyond 1.0 s
+        assert len(trimmed) == 500
+        assert trimmed.duration == pytest.approx(0.5)
+
+    def test_trim_exact_boundaries(self):
+        sig = Signal.sine(440, duration=1.0, sample_rate=1000)
+        trimmed = sig.trim(start=0.0, end=1.0)
+        assert len(trimmed) == 1000
+
     def test_gain(self):
         sig = Signal(np.array([1.0, 2.0, 3.0]), sample_rate=3)
         amplified = sig.gain(2.0)

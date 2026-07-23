@@ -635,9 +635,26 @@ class Signal:
         return Signal(self.data / peak, self.sample_rate)
 
     def trim(self, start: float = 0.0, end: float | None = None) -> Signal:
-        """Cut the signal to a time range, in seconds."""
+        """Cut the signal to a time range, in seconds.
+
+        ``end`` beyond the signal's duration is capped at the end of the signal.
+
+        Raises:
+            ValueError: if ``start`` is negative, ``end`` is before ``start``,
+                or the selected range contains no samples.
+        """
+        if start < 0:
+            raise ValueError(f"trim start must be non-negative, got {start}.")
+        if end is not None and end < start:
+            raise ValueError(f"trim end ({end}) must not be before start ({start}).")
         start_idx = int(start * self.sample_rate)
         end_idx = int(end * self.sample_rate) if end is not None else len(self.data)
+        end_idx = min(end_idx, len(self.data))
+        if start_idx >= end_idx:
+            raise ValueError(
+                f"trim range [{start}, {end}) selects no samples from a signal of "
+                f"duration {self.duration:.6g} s."
+            )
         return Signal(self.data[start_idx:end_idx], self.sample_rate)
 
     def gain(self, factor: float) -> Signal:
