@@ -900,6 +900,12 @@ class Signal:
                 or is not 1-D.
         """
         kernel = self._coerce_other(other, "convolve")
+        if mode == "valid" and len(kernel) > len(self.data):
+            raise ValueError(
+                f"mode='valid' requires the kernel to be no longer than the signal, "
+                f"but the kernel has {len(kernel)} samples and the signal has "
+                f"{len(self.data)}. The roles of signal and kernel would silently invert."
+            )
         result = scipy_signal.fftconvolve(self.data, kernel, mode=mode)
         return Signal(np.asarray(result), self.sample_rate)
 

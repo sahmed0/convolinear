@@ -580,6 +580,11 @@ class TestConvolve:
         with pytest.raises(ValueError, match="1-D"):
             sig.convolve(np.ones((3, 3)))
 
+    def test_valid_mode_kernel_longer_than_signal_raises(self):
+        sig = Signal(np.ones(3), sample_rate=5)
+        with pytest.raises(ValueError, match="mode='valid'"):
+            sig.convolve(np.ones(5), mode="valid")
+
 
 class TestCorrelate:
     """Tests for Signal.correlate() and Signal.time_delay()."""
