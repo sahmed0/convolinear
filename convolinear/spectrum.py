@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy import signal as scipy_signal
 
 if TYPE_CHECKING:
     from .signal import Signal
@@ -60,10 +61,32 @@ class Spectrum:
         """The magnitude at the peak frequency."""
         return float(np.max(self.magnitudes))
 
-    def top_n(self, n: int = 5) -> list[tuple[float, float]]:
-        """Return the top n peaks as (frequency, magnitude) pairs."""
-        idx = np.argsort(self.magnitudes)[::-1][:n]
-        return [(float(self.frequencies[i]), float(self.magnitudes[i])) for i in idx]
+    def top_n(self, n: int = 5, min_prominence: float | None = None) -> list[tuple[float, float]]:
+        """Return up to ``n`` spectral peaks as (frequency, magnitude) pairs.
+
+        Peaks are true local maxima found with :func:`scipy.signal.find_peaks`
+        (not the ``n`` largest bins - the largest bins of a leaky spectrum are
+        usually samples of a single lobe). Results are ordered by descending
+        magnitude. The list may contain fewer than ``n`` entries - or be empty -
+        when the spectrum has fewer qualifying peaks. Bins at the very edges of
+        the spectrum (DC and Nyquist) cannot qualify as peaks.
+
+        Args:
+            n:              Maximum number of peaks to return.
+            min_prominence: Optional prominence threshold, in magnitude units,
+                            forwarded to ``find_peaks``. Use it to suppress noise
+                            peaks.
+
+        Raises:
+            ValueError: if ``n`` is less than 1.
+        """
+        if n < 1:
+            raise ValueError(f"n must be at least 1, got {n}.")
+        magnitudes = self.magnitudes
+        peak_idx, _ = scipy_signal.find_peaks(magnitudes, prominence=min_prominence)
+        order = np.argsort(magnitudes[peak_idx])[::-1][:n]
+        top = peak_idx[order]
+        return [(float(self._frequencies[i]), float(magnitudes[i])) for i in top]
 
     def in_range(self, low: float, high: float) -> Spectrum:
         """Return a new Spectrum containing only frequencies in [low, high] Hz."""
