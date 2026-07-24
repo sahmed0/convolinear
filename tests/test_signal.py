@@ -23,6 +23,10 @@ class TestSignalConstruction:
         with pytest.raises(ValueError, match="positive"):
             Signal(np.array([1.0, 2.0]), sample_rate=-1)
 
+    def test_rejects_empty_data(self):
+        with pytest.raises(ValueError, match="at least one sample"):
+            Signal(np.array([]), sample_rate=100)
+
     def test_sine_constructor(self):
         sig = Signal.sine(frequency=440, duration=0.5, sample_rate=8000)
         assert len(sig) == 4000

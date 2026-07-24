@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
+import numpy.typing as npt
 from scipy import signal as scipy_signal
 from scipy.io import loadmat, wavfile
 
@@ -50,20 +51,54 @@ class Signal:
         Signal.from_wav("audio.wav").normalize().bandpass(300, 3000).plot()
     """
 
-    def __init__(self, data: np.ndarray, sample_rate: int):
-        """NOTE: Treat the data array as read-only.
-        May add self.data.flags.writeable = False in the future
-        To enforce immutability."""
-        self.data = np.asarray(data, dtype=np.float64)
-        self.sample_rate = int(sample_rate)
+    def __init__(self, data: npt.ArrayLike, sample_rate: float):
+        """Create a Signal from a 1-D array of samples and a sample rate in Hz.
 
-        if self.data.ndim != 1:
+        Args:
+            data:        A 1-D array of samples (mono). The array is copied and
+                         frozen, so the Signal is immutable and never aliases a
+                         caller-owned array.
+            sample_rate: Samples per second. A float that may be fractional or
+                         below 1 Hz - e.g. ``1 / 86400`` for daily data.
+
+        Raises:
+            ValueError: if ``data`` is not 1-D, is empty, or ``sample_rate`` is
+                not finite and positive.
+        """
+        arr = np.asarray(data, dtype=np.float64)
+        if arr is data:
+            # np.asarray returned the caller's own object (already float64) -
+            # copy so freezing doesn't mutate an array the caller still holds.
+            arr = arr.copy()
+
+        if arr.ndim != 1:
             raise ValueError(
-                f"Signal data must be 1D (mono), got shape {self.data.shape}. "
+                f"Signal data must be 1-D (mono), got shape {arr.shape}. "
                 "For stereo, take a single channel."
             )
-        if self.sample_rate <= 0:
-            raise ValueError(f"Sample rate must be positive, got {sample_rate}")
+        if arr.size == 0:
+            raise ValueError("Signal must contain at least one sample; got an empty array.")
+
+        self._sample_rate = float(sample_rate)
+        if not math.isfinite(self._sample_rate) or self._sample_rate <= 0:
+            raise ValueError(f"Sample rate must be a finite positive number, got {sample_rate}.")
+
+        arr.flags.writeable = False
+        self._data = arr
+
+    @property
+    def data(self) -> npt.NDArray[np.float64]:
+        """The signal's samples as a read-only 1-D array.
+
+        Writing to the returned array raises ``ValueError``; use
+        :meth:`to_numpy` (which copies by default) for a writable array.
+        """
+        return self._data
+
+    @property
+    def sample_rate(self) -> float:
+        """The sample rate in Hz (read-only)."""
+        return self._sample_rate
 
     # --- Constructors ---
 
@@ -570,10 +605,7 @@ class Signal:
         """Root mean square amplitude - a measure of average signal energy.
 
         A full-scale sine wave (amplitude 1.0) has an RMS of 1/√2 ≈ 0.707.
-        An empty signal has an RMS of 0.
         """
-        if len(self.data) == 0:
-            return 0.0
         return float(np.sqrt(np.mean(self.data**2)))
 
     @property
@@ -590,10 +622,8 @@ class Signal:
         """Mean square power - the average of the squared samples.
 
         This is the square of :attr:`rms`. A full-scale sine wave
-        (amplitude 1.0) has a power of 0.5. An empty signal has a power of 0.
+        (amplitude 1.0) has a power of 0.5.
         """
-        if len(self.data) == 0:
-            return 0.0
         return float(np.mean(self.data**2))
 
     @property
@@ -610,9 +640,9 @@ class Signal:
     def peak_db(self) -> float:
         """Peak absolute amplitude in dBFS.
 
-        Returns ``-inf`` for a silent or empty signal.
+        Returns ``-inf`` for a silent signal.
         """
-        p = float(np.max(np.abs(self.data))) if len(self.data) else 0.0
+        p = float(np.max(np.abs(self.data)))
         return float("-inf") if p == 0.0 else float(20 * np.log10(p))
 
     def __len__(self) -> int:
@@ -1070,8 +1100,6 @@ class Signal:
             raise ValueError(f"overlap must be in [0, 1), got {overlap}.")
         if int(segment_length) < 1:
             raise ValueError(f"segment_length must be a positive integer, got {segment_length}.")
-        if len(self.data) == 0:
-            raise ValueError("Cannot compute a spectrogram of an empty signal.")
 
         # Never request a segment longer than the signal itself.
         nperseg = min(int(segment_length), len(self.data))
