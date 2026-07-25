@@ -1,5 +1,7 @@
 """Tests for the Spectrum class (FFT results, to_signal, in_range, top_n, peaks)."""
 
+import itertools
+
 import numpy as np
 import pytest
 
@@ -36,6 +38,33 @@ class TestSpectrum:
         sub = spec.in_range(100, 1000)
         assert sub.frequencies.min() >= 100
         assert sub.frequencies.max() <= 1000
+
+
+class TestTopN:
+    def test_returns_distinct_lobes(self):
+        # An off-bin tone leaks across several bins; the top 3 raw bins would be
+        # samples of one lobe. Real peak-picking must return distinct peaks.
+        spec = Signal.sine(440.5, duration=1.0, sample_rate=8000).fft()
+        peaks = spec.top_n(3)
+        bin_spacing = float(spec.frequencies[1] - spec.frequencies[0])
+        freqs = sorted(f for f, _ in peaks)
+        for a, b in itertools.pairwise(freqs):
+            assert b - a > 2 * bin_spacing
+
+    def test_two_tone_returns_both(self):
+        base = Signal.sine(440, duration=1.0, sample_rate=8000)
+        second = Signal.sine(1000, duration=1.0, sample_rate=8000, amplitude=0.5)
+        spec = (base + second).fft()
+        peaks = spec.top_n(3)
+        top_two = sorted(f for f, _ in peaks[:2])
+        assert top_two[0] == pytest.approx(440, abs=2)
+        assert top_two[1] == pytest.approx(1000, abs=2)
+
+    def test_rejects_n_below_one(self):
+        spec = Signal.sine(440, duration=1.0, sample_rate=8000).fft()
+        with pytest.raises(ValueError, match="at least 1"):
+            spec.top_n(0)
+
 
 
 class TestFFTWindowing:
