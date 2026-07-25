@@ -141,10 +141,10 @@ class Signal:
     @classmethod
     def _rate_from_dataframe(
         cls,
-        df,
+        df: pd.DataFrame,
         time_column: str | None,
-        sample_rate: int | None,
-    ) -> int:
+        sample_rate: float | None,
+    ) -> float:
         """Shared logic for inferring sample rate from Dataframe time column."""
 
         import pandas as pd
@@ -176,23 +176,24 @@ class Signal:
         else:
             elapsed = times - times.iloc[0]
 
-        elapsed = elapsed.to_numpy(dtype=np.float64)
+        elapsed_arr = elapsed.to_numpy(dtype=np.float64)
 
-        if len(elapsed) < 2:
+        if len(elapsed_arr) < 2:
             raise ValueError("Need at least 2 rows to infer sample rate.")
 
         # Infer sample rate from the median interval between samples.
         # Using the median (rather than start/end) is more robust to gaps or
         # jitter in sensor logs.
-        intervals = np.diff(elapsed)
+        intervals = np.diff(elapsed_arr)
         if np.any(intervals <= 0):
             raise ValueError(
                 "Timestamps must be strictly increasing. Sort the data by time before loading."
             )
 
         median_interval = float(np.median(intervals))
-        inferred_rate = round(1.0 / median_interval)
-        return inferred_rate
+        # Return the raw float rate (no rounding): daily data, for example,
+        # has a true rate of 1/86400 Hz that rounding would collapse to zero.
+        return 1.0 / median_interval
 
     @classmethod
     def from_csv(
@@ -200,9 +201,9 @@ class Signal:
         path: str,
         value_column: str,
         time_column: str | None = None,
-        sample_rate: int | None = None,
-        **pandas_kwargs,
-    ) -> Signal:
+        sample_rate: float | None = None,
+        **pandas_kwargs: Any,
+    ) -> Self:
         """Load a signal from a CSV file.
 
         You must provide either a ``time_column`` (and the sample rate will be
@@ -215,7 +216,8 @@ class Signal:
             time_column:    Name of the column containing timestamps. Can be
                             numeric seconds or a datetime string - both are
                             handled automatically.
-            sample_rate:    Samples per second. Required if ``time_column`` is
+            sample_rate:    Samples per second (a float; fractional and sub-1 Hz
+                            rates are supported). Required if ``time_column`` is
                             not provided.
             **pandas_kwargs: Extra keyword arguments forwarded to
                             ``pandas.read_csv`` (e.g. ``sep``, ``skiprows``).
@@ -255,9 +257,9 @@ class Signal:
         path: str,
         value_column: str,
         time_column: str | None = None,
-        sample_rate: int | None = None,
-        **pandas_kwargs,
-    ) -> Signal:
+        sample_rate: float | None = None,
+        **pandas_kwargs: Any,
+    ) -> Self:
         """Load a signal from a Parquet file.
 
         You must provide either a ``time_column`` (and the sample rate will be
@@ -270,7 +272,8 @@ class Signal:
             time_column:    Name of the column containing timestamps. Can be
                             numeric seconds or a datetime string - both are
                             handled automatically.
-            sample_rate:    Samples per second. Required if ``time_column`` is
+            sample_rate:    Samples per second (a float; fractional and sub-1 Hz
+                            rates are supported). Required if ``time_column`` is
                             not provided.
             **pandas_kwargs: Extra keyword arguments forwarded to
                             ``pandas.read_parquet`` (e.g. ``columns``, ``filters``).
@@ -309,15 +312,16 @@ class Signal:
     def from_numpy(
         cls,
         array: np.ndarray | str,
-        sample_rate: int,
+        sample_rate: float,
         column: int | None = None,
-    ) -> Signal:
+    ) -> Self:
         """Load a signal from a NumPy array or a .npy / .npz file.
 
         Args:
             array:       A 1D NumPy array of samples, or a path string to a
                          .npy or .npz file.
-            sample_rate: Samples per second.
+            sample_rate: Samples per second (a float; fractional and sub-1 Hz
+                         rates are supported).
             column:      If ``array`` is 2D (multiple channels), which column
                          index to use. Defaults to None (resolved to 0 for 2D arrays).
 
@@ -363,10 +367,10 @@ class Signal:
     @classmethod
     def from_pandas(
         cls,
-        series_or_df,
-        sample_rate: int | None = None,
+        series_or_df: pd.Series[float] | pd.DataFrame,
+        sample_rate: float | None = None,
         column: str | None = None,
-    ) -> Signal:
+    ) -> Self:
         """Load a signal from a pandas Series or DataFrame.
 
         For a Series, values are used directly.
@@ -378,7 +382,8 @@ class Signal:
 
         Args:
             series_or_df: A ``pandas.Series`` or ``pandas.DataFrame``.
-            sample_rate:  Samples per second. Inferred from the index if absent.
+            sample_rate:  Samples per second (a float; fractional and sub-1 Hz
+                          rates are supported). Inferred from the index if absent.
             column:       Column name to use when passing a DataFrame.
 
         Example::
@@ -429,15 +434,13 @@ class Signal:
             if len(index) < 2:
                 raise ValueError("Need at least 2 rows to infer sample rate.")
             intervals = pd.Series(index).diff().dropna().dt.total_seconds()
-            inferred_rate = round(1.0 / float(intervals.median()))
-            return cls(data, inferred_rate)
+            return cls(data, 1.0 / float(intervals.median()))
 
         if pd.api.types.is_numeric_dtype(index):
             if len(index) < 2:
                 raise ValueError("Need at least 2 rows to infer sample rate.")
-            intervals = np.diff(index.to_numpy(dtype=np.float64))
-            inferred_rate = round(1.0 / float(np.median(intervals)))
-            return cls(data, inferred_rate)
+            interval_arr = np.diff(index.to_numpy(dtype=np.float64))
+            return cls(data, 1.0 / float(np.median(interval_arr)))
 
         raise ValueError(
             "Could not infer sample rate from index. Please provide an explicit 'sample_rate'."
@@ -449,9 +452,9 @@ class Signal:
         path: str,
         variable: str | None = None,
         sample_rate_variable: str | None = None,
-        sample_rate: int | None = None,
+        sample_rate: float | None = None,
         column: int | None = None,
-    ) -> Signal:
+    ) -> Self:
         """Load a signal from a MATLAB .mat file.
 
         Supports MATLAB files up to v7.2 (the large majority of .mat files).
@@ -466,8 +469,9 @@ class Signal:
             sample_rate_variable:  Name of a scalar variable in the file that
                                    holds the sample rate (e.g. ``"fs"`` or
                                    ``"Fs"``). Common in MATLAB workspaces.
-            sample_rate:           Explicit sample rate. Takes precedence over
-                                   ``sample_rate_variable``.
+            sample_rate:           Explicit sample rate (a float; fractional and
+                                   sub-1 Hz rates are supported). Takes precedence
+                                   over ``sample_rate_variable``.
             column:                For multi-column arrays, which column index
                                    to use. Defaults to 0.
 
@@ -495,7 +499,7 @@ class Signal:
                         f"Sample rate variable '{sample_rate_variable}' not found. "
                         f"Available variables: {', '.join(data_keys)}"
                     )
-                sample_rate = int(np.asarray(mat[sample_rate_variable]).flat[0])
+                sample_rate = float(np.asarray(mat[sample_rate_variable]).flat[0])
             else:
                 raise ValueError(
                     "Provide either 'sample_rate' or 'sample_rate_variable' "
@@ -545,16 +549,20 @@ class Signal:
     @classmethod
     def from_function(
         cls,
-        func: Callable[[np.ndarray], np.ndarray],
+        func: Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]],
         duration: float,
-        sample_rate: int = 44100,
-    ) -> Signal:
+        sample_rate: float = 44100.0,
+    ) -> Self:
         """Generate a signal by sampling a function of time.
 
-        Example:
+        ``sample_rate`` is a float (fractional and sub-1 Hz rates are supported).
+        ``duration * sample_rate`` must round to at least one sample, otherwise
+        the resulting empty signal is rejected at construction.
+
+        Example::
             sine = Signal.from_function(lambda t: np.sin(2*np.pi*440*t), duration=1.0)
         """
-        n_samples = int(duration * sample_rate)
+        n_samples = round(duration * sample_rate)
         t = np.arange(n_samples) / sample_rate
         data = func(t)
         return cls(data, sample_rate)
@@ -564,10 +572,10 @@ class Signal:
         cls,
         frequency: float,
         duration: float,
-        sample_rate: int = 44100,
+        sample_rate: float = 44100.0,
         amplitude: float = 1.0,
         phase: float = 0.0,
-    ) -> Signal:
+    ) -> Self:
         """Generate a pure sine wave. Convenience constructor."""
         return cls.from_function(
             lambda t: amplitude * np.sin(2 * np.pi * frequency * t + phase),
@@ -579,13 +587,13 @@ class Signal:
     def noise(
         cls,
         duration: float,
-        sample_rate: int = 44100,
+        sample_rate: float = 44100.0,
         amplitude: float = 1.0,
         seed: int | None = None,
-    ) -> Signal:
+    ) -> Self:
         """Generate white noise. Convenience constructor."""
         rng = np.random.default_rng(seed)
-        n_samples = int(duration * sample_rate)
+        n_samples = round(duration * sample_rate)
         return cls(amplitude * rng.standard_normal(n_samples), sample_rate)
 
     # --- Properties ---
@@ -651,7 +659,7 @@ class Signal:
     def __repr__(self) -> str:
         return (
             f"Signal(samples={len(self.data)}, "
-            f"sample_rate={self.sample_rate} Hz, "
+            f"sample_rate={self.sample_rate:g} Hz, "
             f"duration={self.duration:.3f} s)"
         )
 
