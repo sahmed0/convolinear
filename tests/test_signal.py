@@ -39,6 +39,44 @@ class TestSignalConstruction:
         assert sig.data[0] == pytest.approx(0.0)
 
 
+class TestFloatSampleRates:
+    def test_sub_one_hz_rate(self):
+        sig = Signal(np.ones(10), sample_rate=0.5)
+        assert sig.sample_rate == 0.5
+        assert sig.duration == 20.0
+        assert sig.time_axis[-1] == 18.0
+
+    def test_fractional_rate_not_truncated(self):
+        sig = Signal(np.ones(4), sample_rate=44100.9)
+        assert sig.sample_rate == 44100.9
+
+    @pytest.mark.parametrize("bad_rate", [0, -1, float("nan"), float("inf")])
+    def test_rejects_non_finite_or_non_positive_rate(self, bad_rate):
+        with pytest.raises(ValueError):
+            Signal(np.ones(4), sample_rate=bad_rate)
+
+    def test_repr_prints_integer_valued_rate_without_decimal(self):
+        sig = Signal(np.ones(4), sample_rate=44100.0)
+        assert "sample_rate=44100 Hz" in repr(sig)
+
+    def test_resample_preserves_tone(self):
+        # Downsampling should keep the tone frequency.
+        sig = Signal.sine(100, 1.0, 8000)
+        resampled = sig.resample(4000)
+        assert resampled.sample_rate == 4000
+        assert resampled.fft().peak_frequency == pytest.approx(100, abs=1.5)
+
+    def test_resample_too_low_raises(self):
+        sig = Signal(np.ones(4), sample_rate=10)
+        with pytest.raises(ValueError, match=r"no samples|higher rate"):
+            sig.resample(1)
+
+    def test_fractional_rate_fft_peak(self):
+        # 80 samples at 2 Hz; a 0.25 Hz tone should resolve.
+        sig = Signal.sine(0.25, duration=40, sample_rate=2.0)
+        assert sig.fft().peak_frequency == pytest.approx(0.25, abs=0.05)
+
+
 class TestSignalTransformations:
     def test_normalize(self):
         sig = Signal(np.array([0.0, 0.5, -0.25, 0.3]), sample_rate=4)

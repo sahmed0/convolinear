@@ -108,14 +108,14 @@ class TestFromPandas:
         index = pd.date_range("2024-01-01", periods=4, freq="10ms")
         series = pd.Series([1.0, 2.0, 3.0, 4.0], index=index)
         sig = Signal.from_pandas(series)
-        assert sig.sample_rate == 100
+        assert sig.sample_rate == pytest.approx(100)
 
     def test_infer_rate_from_numeric_index(self):
         import pandas as pd
 
         series = pd.Series([1.0, 2.0, 3.0, 4.0], index=[0.0, 0.01, 0.02, 0.03])
         sig = Signal.from_pandas(series)
-        assert sig.sample_rate == 100
+        assert sig.sample_rate == pytest.approx(100)
 
     def test_wrong_type_raises(self):
         with pytest.raises(TypeError, match="Series or DataFrame"):
@@ -183,7 +183,7 @@ class TestRateFromDataframe:
 
         df = pd.DataFrame({"t": [0.0, 0.01, 0.02, 0.03], "v": [1.0, 2.0, 3.0, 4.0]})
         rate = Signal._rate_from_dataframe(df, time_column="t", sample_rate=None)
-        assert rate == 100
+        assert rate == pytest.approx(100)
 
     def test_infer_from_datetime_string_column(self):
         import pandas as pd
@@ -200,7 +200,7 @@ class TestRateFromDataframe:
             }
         )
         rate = Signal._rate_from_dataframe(df, time_column="ts", sample_rate=None)
-        assert rate == 100
+        assert rate == pytest.approx(100)
 
     def test_missing_time_column_raises(self):
         import pandas as pd
@@ -423,6 +423,22 @@ class TestToWav:
         recovered = raw.astype(np.float64) / 32767
         np.testing.assert_array_almost_equal(recovered, sig.data, decimal=3)
 
+    def test_integer_valued_float_rate_writes(self, tmp_path):
+        from scipy.io import wavfile
+
+        sig = Signal(np.array([0.1, 0.2, 0.3]), sample_rate=8000.0)
+        path = str(tmp_path / "out.wav")
+        sig.to_wav(path)
+        sr, _ = wavfile.read(path)
+        assert sr == 8000
+
+    @pytest.mark.parametrize("bad_rate", [0.5, 44100.5])
+    def test_non_integer_rate_raises_with_guidance(self, tmp_path, bad_rate):
+        sig = Signal(np.array([0.1, 0.2, 0.3]), sample_rate=bad_rate)
+        path = str(tmp_path / "out.wav")
+        with pytest.raises(ValueError, match=r"integer sample rate|Resample first"):
+            sig.to_wav(path)
+
 
 class TestToDataframe:
     def test_default_columns(self):
@@ -450,7 +466,7 @@ class TestToDataframe:
         sig = Signal.sine(440, duration=0.1, sample_rate=8000)
         df = sig.to_dataframe(time_index=True)
         recovered = Signal.from_pandas(df, column="amplitude")
-        assert recovered.sample_rate == sig.sample_rate
+        assert recovered.sample_rate == pytest.approx(sig.sample_rate)
         np.testing.assert_array_almost_equal(recovered.data, sig.data)
 
     def test_time_index_named(self):
@@ -490,3 +506,28 @@ class TestToNumpy:
         arr = sig.to_numpy(include_time=True)
         recovered = Signal.from_numpy(arr, sample_rate=sig.sample_rate, column=1)
         np.testing.assert_array_almost_equal(recovered.data, sig.data)
+
+
+class TestDailyDataRegression:
+    """Loading daily-sampled data must yield
+    the true sub-1 Hz rate (1/86400) instead of collapsing to zero."""
+
+    def test_from_pandas_daily_datetime_index(self):
+        import pandas as pd
+
+        index = pd.date_range("2024-01-01", periods=30, freq="D")
+        series = pd.Series(np.arange(30, dtype=np.float64), index=index)
+        sig = Signal.from_pandas(series)
+        assert sig.sample_rate == pytest.approx(1 / 86400)
+
+    def test_from_csv_iso_date_time_column(self, tmp_path):
+        import pandas as pd
+
+        dates = pd.date_range("2024-01-01", periods=30, freq="D")
+        rows = "date,value\n" + "\n".join(
+            f"{d.date().isoformat()},{i}" for i, d in enumerate(dates)
+        )
+        path = tmp_path / "daily.csv"
+        path.write_text(rows)
+        sig = Signal.from_csv(str(path), value_column="value", time_column="date")
+        assert sig.sample_rate == pytest.approx(1 / 86400)
