@@ -856,9 +856,18 @@ class Signal:
         filtered = scipy_signal.sosfiltfilt(sos, self.data)
         return Signal(filtered, self.sample_rate)
 
-    def resample(self, new_sample_rate: int) -> Signal:
-        """Resample the signal to a new sample rate."""
-        new_n = int(len(self.data) * new_sample_rate / self.sample_rate)
+    def resample(self, new_sample_rate: float) -> Signal:
+        """Resample the signal to a new sample rate.
+
+        Raises:
+            ValueError: if the new rate is too low to keep at least one sample.
+        """
+        new_n = round(len(self.data) * new_sample_rate / self.sample_rate)
+        if new_n < 1:
+            raise ValueError(
+                f"Resampling to {new_sample_rate:g} Hz leaves no samples for a signal of "
+                f"{len(self.data)} samples at {self.sample_rate:g} Hz. Choose a higher rate."
+            )
         resampled = np.asarray(scipy_signal.resample(self.data, new_n))
         return Signal(resampled, new_sample_rate)
 
@@ -1000,7 +1009,7 @@ class Signal:
             if min_distance < 0:
                 raise ValueError(f"min_distance must be non-negative, got {min_distance}.")
             # scipy expects the distance in samples and requires it to be >= 1.
-            distance = max(1, round(min_distance * self.sample_rate))
+            distance = int(max(1, round(min_distance * self.sample_rate)))
 
         indices, _ = scipy_signal.find_peaks(self.data, height=min_height, distance=distance)
         return PeakResult(indices / self.sample_rate, self.data[indices])
@@ -1139,12 +1148,23 @@ class Signal:
 
     # --- Input/Output & visualisation ---
 
-    def to_wav(self, path: str) -> Signal:
-        """Save the signal as a 16-bit WAV file. Returns self for chaining."""
+        """Save the signal as a 16-bit WAV file. Returns self for chaining.
+
+        Raises:
+            ValueError: if the sample rate is not integer-valued. WAV headers
+                store an integer rate, so resample first (integer-valued floats
+                such as ``48000.0`` are accepted).
+        """
+        if self.sample_rate != int(self.sample_rate):
+            raise ValueError(
+                f"WAV files require an integer sample rate; this signal's rate is "
+                f"{self.sample_rate:g} Hz. Resample first, e.g. "
+                f".resample({max(1, round(self.sample_rate))})."
+            )
         # Clip to [-1, 1] and convert to int16
         clipped = np.clip(self.data, -1.0, 1.0)
         int_data = (clipped * 32767).astype(np.int16)
-        wavfile.write(path, self.sample_rate, int_data)
+        wavfile.write(path, int(self.sample_rate), int_data)
         return self
 
     def to_numpy(self, include_time: bool = False, copy: bool = True) -> np.ndarray:
