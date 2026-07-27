@@ -36,8 +36,25 @@ class TestSpectrum:
         sig = Signal.sine(440, duration=1.0, sample_rate=8000)
         spec = sig.fft()
         sub = spec.in_range(100, 1000)
-        assert sub.frequencies.min() >= 100
-        assert sub.frequencies.max() <= 1000
+
+        assert len(sub) == len(spec)
+        np.testing.assert_array_equal(sub.frequencies, spec.frequencies)
+        out_of_band = (sub.frequencies < 100) | (sub.frequencies > 1000)
+        assert np.all(sub.magnitudes[out_of_band] == 0.0)
+        in_band = ~out_of_band
+        assert np.any(sub.magnitudes[in_band] > 0.0)
+
+    def test_in_range_rejects_low_above_high(self):
+        spec = Signal.sine(440, duration=1.0, sample_rate=8000).fft()
+        with pytest.raises(ValueError, match="must not exceed"):
+            spec.in_range(1000, 100)
+
+    def test_in_range_empty_band_raises(self):
+        # 8000 samples at 8000 Hz -> 1 Hz bin spacing; nothing sits between
+        # two adjacent integer bins.
+        spec = Signal.sine(440, duration=1.0, sample_rate=8000).fft()
+        with pytest.raises(ValueError, match="No frequency bins"):
+            spec.in_range(100.2, 100.8)
 
 
 class TestTopN:
@@ -65,6 +82,30 @@ class TestTopN:
         with pytest.raises(ValueError, match="at least 1"):
             spec.top_n(0)
 
+
+class TestSpectrumConstruction:
+    def test_rejects_non_positive_n_samples(self):
+        with pytest.raises(ValueError, match="n_samples must be positive"):
+            Spectrum(np.array([1.0 + 0j]), np.array([0.0]), n_samples=0, sample_rate=8000.0)
+
+    def test_rejects_inconsistent_coefficient_count(self):
+        # 8 samples -> 5 rfft bins expected; supplying 3 must raise.
+        with pytest.raises(ValueError, match="rfft coefficients"):
+            Spectrum(
+                np.zeros(3, dtype=complex),
+                np.zeros(3),
+                n_samples=8,
+                sample_rate=8000.0,
+            )
+
+    def test_rejects_shape_mismatch(self):
+        with pytest.raises(ValueError, match="same shape"):
+            Spectrum(
+                np.zeros(3, dtype=complex),
+                np.zeros(4),
+                n_samples=4,
+                sample_rate=8000.0,
+            )
 
 
 class TestFFTWindowing:
@@ -99,19 +140,91 @@ class TestFFTWindowing:
 class TestSpectrumToSignal:
     def test_returns_signal_instance(self):
         spec = Signal.sine(440, duration=1.0, sample_rate=8000).fft()
-        assert isinstance(spec.to_signal(8000), Signal)
+        assert isinstance(spec.to_signal(), Signal)
 
     def test_sample_rate_propagated(self):
         spec = Signal.sine(440, duration=1.0, sample_rate=8000).fft()
-        out = spec.to_signal(8000)
+        out = spec.to_signal()
         assert out.sample_rate == 8000
 
     def test_output_length(self):
         sig = Signal.sine(440, duration=1.0, sample_rate=8000)
-        out = sig.fft().to_signal(8000)
+        out = sig.fft().to_signal()
         assert len(out) == len(sig)
 
     def test_dominant_frequency_preserved(self):
         sig = Signal.sine(440, duration=1.0, sample_rate=8000)
-        reconstructed = sig.fft().to_signal(8000)
+        reconstructed = sig.fft().to_signal()
         assert reconstructed.fft().peak_frequency == pytest.approx(440, abs=2)
+
+
+class TestLosslessRoundTrip:
+    @pytest.mark.parametrize("n", [64, 65])  # even and odd lengths
+    def test_fft_roundtrip_is_lossless(self, n):
+        rng = np.random.default_rng(0)
+        sig = Signal(rng.standard_normal(n), sample_rate=8000.0)
+        rt = sig.fft().to_signal()
+        np.testing.assert_allclose(rt.data, sig.data, atol=1e-12)
+        assert rt.sample_rate == sig.sample_rate
+        assert len(rt) == len(sig)
+
+    def test_windowed_roundtrip_returns_windowed_waveform(self):
+        rng = np.random.default_rng(1)
+        sig = Signal(rng.standard_normal(128), sample_rate=8000.0)
+        rt = sig.fft(window="hann").to_signal()
+        np.testing.assert_allclose(rt.data, sig.window("hann").data, atol=1e-12)
+
+
+class TestDerivedProperties:
+    def test_magnitudes_unit_sine_reads_one(self):
+        # A tone at an exact bin reads magnitude ~1 under the library convention.
+        spec = Signal.sine(500, duration=1.0, sample_rate=8000).fft()
+        assert spec.peak_frequency == pytest.approx(500, abs=1e-6)
+        assert spec.peak_magnitude == pytest.approx(1.0, abs=1e-3)
+
+    def test_magnitudes_dc_only_signal(self):
+        spec = Signal(np.ones(64), sample_rate=8000.0).fft()
+        assert spec.frequencies[0] == 0.0
+        assert spec.magnitudes[0] == pytest.approx(1.0)
+        # No spurious energy anywhere else.
+        assert np.all(spec.magnitudes[1:] < 1e-9)
+
+    def test_magnitudes_are_a_fresh_writable_copy(self):
+        spec = Signal.sine(500, duration=0.1, sample_rate=8000).fft()
+        mags = spec.magnitudes
+        mags[0] = 999.0  # must not raise and must not affect the spectrum
+        assert spec.magnitudes[0] != 999.0
+
+    def test_phase_of_cosine_is_zero_at_its_bin(self):
+        # A cosine at an exact bin has ~zero phase there.
+        spec = Signal.from_function(
+            lambda t: np.cos(2 * np.pi * 500 * t), duration=1.0, sample_rate=8000
+        ).fft()
+        bin_idx = int(np.argmin(np.abs(spec.frequencies - 500)))
+        assert spec.phase[bin_idx] == pytest.approx(0.0, abs=1e-3)
+
+    def test_power_is_magnitudes_squared(self):
+        spec = Signal.sine(500, duration=0.1, sample_rate=8000).fft()
+        np.testing.assert_allclose(spec.power, spec.magnitudes**2)
+
+
+class TestInRangeBrickWall:
+    def test_acts_as_bandpass_filter(self):
+        t = np.arange(8000) / 8000
+        two_tone = np.sin(2 * np.pi * 200 * t) + np.sin(2 * np.pi * 1500 * t)
+        spec = Signal(two_tone, sample_rate=8000).fft()
+        filtered = spec.in_range(100, 400).to_signal()
+        # Only the 200 Hz tone survives.
+        assert filtered.fft().peak_frequency == pytest.approx(200, abs=2)
+        # The 1500 Hz bin is gone.
+        out_spec = filtered.fft()
+        bin_1500 = int(np.argmin(np.abs(out_spec.frequencies - 1500)))
+        assert out_spec.magnitudes[bin_1500] < 1e-6
+
+    def test_keeps_full_length_and_zeroes_out_of_band(self):
+        spec = Signal.sine(440, duration=1.0, sample_rate=8000).fft()
+        sub = spec.in_range(100, 1000)
+        assert len(sub) == len(spec)
+        out_of_band = (sub.frequencies < 100) | (sub.frequencies > 1000)
+        assert np.all(sub.magnitudes[out_of_band] == 0.0)
+
