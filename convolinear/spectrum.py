@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import math
+from typing import TYPE_CHECKING, Self, cast
 
 import numpy as np
+import numpy.typing as npt
 from scipy import signal as scipy_signal
 
 if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+
     from .signal import Signal
 
 
-def _limit_to_max_freq(frequencies, values, max_freq):
+def _limit_to_max_freq(
+    frequencies: npt.NDArray[np.float64],
+    values: npt.NDArray[np.float64],
+    max_freq: float | None,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Restrict a frequency axis (and its values) to ``<= max_freq``.
 
     Shared by :meth:`Spectrum.plot` and :meth:`Spectrogram.plot`. ``values``
@@ -28,33 +36,134 @@ def _limit_to_max_freq(frequencies, values, max_freq):
 class Spectrum:
     """A frequency-domain representation of a signal.
 
-    Produced by Signal.fft(). Holds magnitudes and their corresponding
-    frequencies in Hertz.
+    Produced by :meth:`Signal.fft`. Stores the raw complex rfft coefficients,
+    so the transform is invertible: :meth:`to_signal` is a lossless inverse.
+    Magnitudes (in the amplitude convention where a unit-amplitude sine reads
+    ~1), phase, and power are derived views computed from the coefficients.
+
+    The stored ``coefficients`` and ``frequencies`` arrays are read-only. The
+    derived ``magnitudes``/``phase``/``power`` properties return a fresh,
+    writable array on each access.
     """
 
-    def __init__(self, magnitudes: np.ndarray, frequencies: np.ndarray):
-        self.magnitudes = np.asarray(magnitudes, dtype=np.float64)
-        self.frequencies = np.asarray(frequencies, dtype=np.float64)
+    def __init__(
+        self,
+        coefficients: npt.ArrayLike,
+        frequencies: npt.ArrayLike,
+        n_samples: int,
+        sample_rate: float,
+        scale: float | None = None,
+    ):
+        """Create a Spectrum from raw rfft coefficients.
 
-        if self.magnitudes.shape != self.frequencies.shape:
+        Args:
+            coefficients: The 1-D complex rfft coefficients (length
+                          ``n_samples // 2 + 1``).
+            frequencies:  The frequency axis in Hz, same shape as
+                          ``coefficients``.
+            n_samples:    Length of the original time-domain signal. Needed to
+                          invert the transform and to identify the Nyquist bin.
+            sample_rate:  Sample rate of the original signal in Hz.
+            scale:        Magnitude scale factor. Defaults to ``2 / n_samples``
+                          (the convention for an un-windowed FFT); pass
+                          ``2 / window.sum()`` for a windowed spectrum.
+
+        Raises:
+            ValueError: if ``coefficients`` is not 1-D, its shape differs from
+                ``frequencies``, ``n_samples`` is not positive, the coefficient
+                count is inconsistent with ``n_samples``, or ``sample_rate`` is
+                not finite and positive.
+        """
+        coeffs = np.asarray(coefficients, dtype=np.complex128)
+        if coeffs is coefficients:
+            coeffs = coeffs.copy()
+        freqs = np.asarray(frequencies, dtype=np.float64)
+        if freqs is frequencies:
+            freqs = freqs.copy()
+
+        if coeffs.ndim != 1:
+            raise ValueError(f"coefficients must be 1-D, got shape {coeffs.shape}.")
+        if coeffs.shape != freqs.shape:
             raise ValueError(
-                f"magnitudes and frequencies must have the same shape, "
-                f"got {self.magnitudes.shape} and {self.frequencies.shape}"
+                f"coefficients and frequencies must have the same shape, "
+                f"got {coeffs.shape} and {freqs.shape}"
             )
+        if n_samples < 1:
+            raise ValueError(f"n_samples must be positive, got {n_samples}.")
+        if len(coeffs) != n_samples // 2 + 1:
+            raise ValueError(
+                f"Expected {n_samples // 2 + 1} rfft coefficients for "
+                f"n_samples={n_samples}, got {len(coeffs)}."
+            )
+        if len(coeffs) == 0:
+            raise ValueError("Spectrum must contain at least one bin.")
+        if not math.isfinite(sample_rate) or sample_rate <= 0:
+            raise ValueError(f"sample_rate must be positive and finite, got {sample_rate}.")
+
+        coeffs.flags.writeable = False
+        freqs.flags.writeable = False
+        self._coefficients = coeffs
+        self._frequencies = freqs
+        self._n_samples = int(n_samples)
+        self._sample_rate = float(sample_rate)
+        self._scale = 2.0 / n_samples if scale is None else float(scale)
 
     def __len__(self) -> int:
-        return len(self.magnitudes)
+        return len(self._coefficients)
 
     def __repr__(self) -> str:
         return (
-            f"Spectrum(bins={len(self.magnitudes)}, "
-            f"freq_range=({self.frequencies[0]:.1f}, {self.frequencies[-1]:.1f}) Hz)"
+            f"Spectrum(bins={len(self._coefficients)}, "
+            f"freq_range=({self._frequencies[0]:.1f}, {self._frequencies[-1]:.1f}) Hz)"
         )
+
+    @property
+    def coefficients(self) -> npt.NDArray[np.complex128]:
+        """The raw complex rfft coefficients (read-only)."""
+        return self._coefficients
+
+    @property
+    def frequencies(self) -> npt.NDArray[np.float64]:
+        """The frequency axis in Hz (read-only)."""
+        return self._frequencies
+
+    @property
+    def n_samples(self) -> int:
+        """Length of the original time-domain signal."""
+        return self._n_samples
+
+    @property
+    def sample_rate(self) -> float:
+        """Sample rate of the original signal in Hz."""
+        return self._sample_rate
+
+    @property
+    def magnitudes(self) -> npt.NDArray[np.float64]:
+        """Single-sided amplitudes under the library's convention (unit sine ~ 1).
+
+        Returns a fresh writable array each access.
+        """
+        mags: npt.NDArray[np.float64] = np.abs(self._coefficients) * self._scale
+        mags[0] /= 2.0  # DC is not split across +/- pairs
+        if self._n_samples % 2 == 0 and len(mags) > 1:
+            mags[-1] /= 2.0  # even-N Nyquist bin likewise
+        return mags
+
+    @property
+    def phase(self) -> npt.NDArray[np.float64]:
+        """Phase angle of each bin in radians, in (-pi, pi]."""
+        return cast("npt.NDArray[np.float64]", np.angle(self._coefficients))
+
+    @property
+    def power(self) -> npt.NDArray[np.float64]:
+        """Per-bin power: ``magnitudes ** 2`` (amplitude-squared, not density -
+        for a density estimate see :meth:`Signal.psd`)."""
+        return self.magnitudes**2
 
     @property
     def peak_frequency(self) -> float:
         """The frequency with the highest magnitude (dominant frequency)."""
-        return float(self.frequencies[np.argmax(self.magnitudes)])
+        return float(self._frequencies[np.argmax(self.magnitudes)])
 
     @property
     def peak_magnitude(self) -> float:
@@ -89,17 +198,52 @@ class Spectrum:
         return [(float(self._frequencies[i]), float(magnitudes[i])) for i in top]
 
     def in_range(self, low: float, high: float) -> Spectrum:
-        """Return a new Spectrum containing only frequencies in [low, high] Hz."""
-        mask = (self.frequencies >= low) & (self.frequencies <= high)
-        return Spectrum(self.magnitudes[mask], self.frequencies[mask])
+        """Zero every bin outside [low, high] Hz (an ideal brick-wall selection).
 
-    def to_signal(self, sample_rate: int) -> Signal:
-        """Reconstruct a time-domain signal via inverse FFT.
+        The returned Spectrum keeps the full frequency axis and bin count, so it
+        remains a complete, invertible rfft: ``in_range(...).to_signal()`` is the
+        signal with all out-of-band content removed.
 
-        Because this Spectrum stores only magnitudes (no phase information),
-        the reconstructed signal has zero phase - all components are cosines.
-        This is useful for synthesis and spectral shaping, but is **not** a
-        lossless round-trip from the original signal.
+        Note that :meth:`top_n` on a brick-walled spectrum can report a bin at
+        the very edge of the retained band as a peak (the sharp cut creates a
+        local maximum); this is expected and not special-cased.
+
+        Raises:
+            ValueError: if ``low > high`` or no bin falls inside the band.
+        """
+        if low > high:
+            raise ValueError(f"low ({low}) must not exceed high ({high}).")
+        mask = (self._frequencies >= low) & (self._frequencies <= high)
+        if not mask.any():
+            spacing = (
+                self._frequencies[1] - self._frequencies[0] if len(self._frequencies) > 1 else 0
+            )
+            raise ValueError(
+                f"No frequency bins in [{low}, {high}] Hz. This spectrum spans "
+                f"{self._frequencies[0]:g}-{self._frequencies[-1]:g} Hz with "
+                f"{spacing:g} Hz spacing."
+            )
+        coeffs = np.where(mask, self._coefficients, 0)
+        return Spectrum(coeffs, self._frequencies, self._n_samples, self._sample_rate, self._scale)
+
+    def to_signal(self) -> Signal:
+        """Invert the FFT: reconstruct the exact time-domain signal.
+
+        Lossless: for ``spec = sig.fft()``, ``spec.to_signal()`` equals ``sig``
+        to floating-point precision. For a windowed spectrum
+        (``sig.fft(window=...)``) the reconstruction is the *windowed* waveform -
+        the taper is part of the transformed data and is faithfully returned; it
+        is not divided back out. For zero-phase synthesis from a magnitude
+        spectrum, see :meth:`from_magnitudes`.
+
+        Returns:
+            A Signal reconstructed by :func:`numpy.fft.irfft`, carrying this
+            spectrum's sample rate.
+        """
+        from .signal import Signal
+
+        return Signal(np.fft.irfft(self._coefficients, n=self._n_samples), self._sample_rate)
+
 
         Each magnitude is placed at its true frequency, derived from the bin
         spacing, so a sub-band Spectrum (e.g. one returned by :meth:`in_range`)
@@ -163,15 +307,15 @@ class Spectrum:
         ylabel: str | None = None,
         log_scale: bool = False,
         max_freq: float | None = None,
-        ax=None,
-    ):
+        ax: Axes | None = None,
+    ) -> Axes:
         """Plot the magnitude spectrum. Returns the matplotlib axis."""
         import matplotlib.pyplot as plt
 
         if ax is None:
             _, ax = plt.subplots(figsize=(10, 3))
 
-        freqs, mags = _limit_to_max_freq(self.frequencies, self.magnitudes, max_freq)
+        freqs, mags = _limit_to_max_freq(self._frequencies, self.magnitudes, max_freq)
 
         ax.plot(freqs, mags, linewidth=0.8)
         ax.set_xlabel(xlabel or "Frequency (Hz)")

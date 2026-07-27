@@ -1046,7 +1046,10 @@ class Signal:
                     ``"blackman"``, and ``"bartlett"``. Defaults to ``None``
                     (rectangular window - no windowing).
 
-        Returns a Spectrum object with magnitude vs frequency.
+        Returns a complex-valued Spectrum: it stores the raw rfft coefficients,
+        so the transform is invertible via :meth:`Spectrum.to_signal`. The
+        ``magnitudes`` it exposes follow the same convention as before (a
+        unit-amplitude sine reads ~1).
 
         Raises:
             ValueError: if ``window`` is not a recognised name.
@@ -1060,23 +1063,21 @@ class Signal:
             key = Signal._validate_window(window)
             w = Signal._FFT_WINDOWS[key](n)
             data = data * w
-            norm_factor = 2.0 / w.sum()
+            scale = 2.0 / w.sum()
         else:
-            norm_factor = 2.0 / n
+            scale = 2.0 / n
 
         frequencies = np.fft.rfftfreq(n, d=1.0 / self.sample_rate)
-        magnitudes = np.abs(np.fft.rfft(data)) * norm_factor
-        # The blanket 2/n (or 2/sum(w)) factor is the right scale for the
-        # interior bins, which are split across the implied +/- frequency pair.
-        # The DC bin (and, for even n, the Nyquist bin) are not, so they would
-        # otherwise read double their true amplitude; halve them back. This
-        # matches the convention used by spectrogram() and inverted by
-        # Spectrum.to_signal().
-        if n > 0:
-            magnitudes[0] /= 2.0
-            if n % 2 == 0 and len(magnitudes) > 1:
-                magnitudes[-1] /= 2.0
-        return Spectrum(magnitudes, frequencies)
+        coefficients = np.fft.rfft(data)
+        # The Spectrum stores raw coefficients; the DC/Nyquist halving that keeps
+        # the amplitude convention lives in Spectrum.magnitudes now.
+        return Spectrum(
+            coefficients,
+            frequencies,
+            n_samples=n,
+            sample_rate=self.sample_rate,
+            scale=scale,
+        )
 
     def spectrogram(
         self,
