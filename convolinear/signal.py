@@ -1182,10 +1182,10 @@ class Signal:
                           which returns the 1D amplitude array on its own. The
                           2D form round-trips back through :meth:`from_numpy`
                           with ``column=1``.
-            copy:         If True (the default), return a fresh array that is
-                          safe to mutate. Pass False to get a view of the
-                          underlying samples and avoid the copy, but treat the
-                          result as read-only - mutating it corrupts the Signal.
+            copy:         If True (the default), return a fresh, writable array
+                          that is safe to mutate. Pass False to avoid the copy
+                          and get the Signal's frozen underlying array directly -
+                          it is read-only, so writing to it raises ``ValueError``.
 
         Example::
 
@@ -1198,7 +1198,7 @@ class Signal:
         """
         if include_time:
             # column_stack always allocates, so the copy flag is moot here.
-            return np.column_stack((self.time_axis, self.data))
+            return cast("npt.NDArray[np.float64]", np.column_stack((self.time_axis, self.data)))
         return self.data.copy() if copy else self.data
 
     def to_dataframe(

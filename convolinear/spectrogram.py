@@ -2,7 +2,24 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 import numpy as np
+import numpy.typing as npt
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+
+
+def _frozen(values: npt.ArrayLike) -> npt.NDArray[np.float64]:
+    """Return a read-only float64 copy of ``values`` (never aliases the input)."""
+    arr = np.asarray(values, dtype=np.float64)
+    if arr is values:
+        # np.asarray returned the caller's own object - copy so freezing
+        # doesn't mutate an array the caller still holds.
+        arr = arr.copy()
+    arr.flags.writeable = False
+    return arr
 
 
 class Spectrogram:
@@ -19,20 +36,45 @@ class Spectrogram:
 
     def __init__(
         self,
-        frequencies: np.ndarray,
-        times: np.ndarray,
-        magnitudes: np.ndarray,
+        frequencies: npt.ArrayLike,
+        times: npt.ArrayLike,
+        magnitudes: npt.ArrayLike,
     ):
-        self.frequencies = np.asarray(frequencies, dtype=np.float64)
-        self.times = np.asarray(times, dtype=np.float64)
-        self.magnitudes = np.asarray(magnitudes, dtype=np.float64)
+        freqs = _frozen(frequencies)
+        frames = _frozen(times)
+        mags = _frozen(magnitudes)
 
-        expected = (len(self.frequencies), len(self.times))
-        if self.magnitudes.shape != expected:
+        if len(freqs) == 0 or len(frames) == 0:
+            raise ValueError(
+                "Spectrogram must have at least one frequency bin and one time frame; "
+                f"got {len(freqs)} frequencies and {len(frames)} frames."
+            )
+
+        expected = (len(freqs), len(frames))
+        if mags.shape != expected:
             raise ValueError(
                 f"magnitudes must have shape (n_frequencies, n_times) = {expected}, "
-                f"got {self.magnitudes.shape}"
+                f"got {mags.shape}"
             )
+
+        self._frequencies = freqs
+        self._times = frames
+        self._magnitudes = mags
+
+    @property
+    def frequencies(self) -> npt.NDArray[np.float64]:
+        """The frequency axis in Hz (read-only)."""
+        return self._frequencies
+
+    @property
+    def times(self) -> npt.NDArray[np.float64]:
+        """The time axis in seconds (read-only)."""
+        return self._times
+
+    @property
+    def magnitudes(self) -> npt.NDArray[np.float64]:
+        """The 2-D magnitude array indexed by frequency (rows) and time (columns), read-only."""
+        return self._magnitudes
 
     def __len__(self) -> int:
         """Number of time frames."""
@@ -49,16 +91,16 @@ class Spectrogram:
     @property
     def shape(self) -> tuple[int, int]:
         """Shape of the magnitude array as ``(n_frequencies, n_times)``."""
-        return self.magnitudes.shape
+        return cast("tuple[int, int]", self.magnitudes.shape)
 
-    def peak_frequency_over_time(self) -> np.ndarray:
+    def peak_frequency_over_time(self) -> npt.NDArray[np.float64]:
         """The dominant frequency (Hz) in each time frame.
 
         Returns an array the same length as ``times`` giving, for every frame,
         the frequency with the largest magnitude. Useful for tracking how a
         tone or formant moves over time (e.g. a chirp or a glissando).
         """
-        return self.frequencies[np.argmax(self.magnitudes, axis=0)]
+        return cast("npt.NDArray[np.float64]", self.frequencies[np.argmax(self.magnitudes, axis=0)])
 
     def plot(
         self,
@@ -69,8 +111,8 @@ class Spectrogram:
         db_scale: bool = True,
         colorbar: bool = True,
         cmap: str = "magma",
-        ax=None,
-    ):
+        ax: Axes | None = None,
+    ) -> Axes:
         """Plot the spectrogram as a heatmap. Returns the matplotlib axis.
 
         Args:

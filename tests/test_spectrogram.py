@@ -13,12 +13,27 @@ class TestSpectrogram:
         sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
         assert isinstance(sig.spectrogram(), Spectrogram)
 
+    def test_rejects_zero_frequency_bins(self):
+        with pytest.raises(ValueError, match="at least one frequency bin"):
+            Spectrogram(np.array([]), np.array([0.0, 1.0]), np.empty((0, 2)))
+
+    def test_rejects_zero_time_frames(self):
+        with pytest.raises(ValueError, match="one time frame"):
+            Spectrogram(np.array([0.0, 1.0]), np.array([]), np.empty((2, 0)))
+
     def test_shape_consistency(self):
         sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
         spec = sig.spectrogram(segment_length=256)
         assert spec.magnitudes.shape == (len(spec.frequencies), len(spec.times))
         assert spec.shape == spec.magnitudes.shape
         assert len(spec) == len(spec.times)
+
+    def test_magnitudes_are_read_only(self):
+        sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
+        spec = sig.spectrogram(segment_length=256)
+        with pytest.raises(ValueError):
+            spec.magnitudes[0, 0] = 1.0
+
 
     def test_frequency_axis_spans_to_nyquist(self):
         sig = Signal.sine(1000, duration=1.0, sample_rate=8000)

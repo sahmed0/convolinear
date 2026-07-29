@@ -258,3 +258,19 @@ class TestFromMagnitudes:
         with pytest.raises(ValueError, match="at least two"):
             Spectrum.from_magnitudes(np.array([1.0]), np.array([0.0]), 8000.0)
 
+
+class TestImmutability:
+    def test_coefficients_are_read_only(self):
+        spec = Signal.sine(500, duration=0.1, sample_rate=8000).fft()
+        with pytest.raises(ValueError):
+            spec.coefficients[0] = 1.0
+
+    def test_frequencies_are_read_only(self):
+        spec = Signal.sine(500, duration=0.1, sample_rate=8000).fft()
+        with pytest.raises(ValueError):
+            spec.frequencies[0] = 1.0
+
+    def test_cannot_reassign_coefficients(self):
+        spec = Signal.sine(500, duration=0.1, sample_rate=8000).fft()
+        with pytest.raises(AttributeError):
+            spec.coefficients = np.zeros(3, dtype=complex)

@@ -39,6 +39,41 @@ class TestSignalConstruction:
         assert sig.data[0] == pytest.approx(0.0)
 
 
+class TestSignalImmutability:
+    def test_data_is_read_only(self):
+        sig = Signal(np.zeros(4), sample_rate=4)
+        with pytest.raises(ValueError):
+            sig.data[0] = 1.0
+
+    def test_cannot_reassign_data(self):
+        sig = Signal(np.zeros(4), sample_rate=4)
+        with pytest.raises(AttributeError):
+            sig.data = np.zeros(3)
+
+    def test_cannot_reassign_sample_rate(self):
+        sig = Signal(np.zeros(4), sample_rate=4)
+        with pytest.raises(AttributeError):
+            sig.sample_rate = 8000
+
+    def test_construction_does_not_freeze_callers_array(self):
+        a = np.zeros(4)
+        sig = Signal(a, sample_rate=1.0)
+        a[0] = 1.0  # caller still owns their array
+        assert sig.data[0] == 0.0
+
+    def test_to_numpy_no_copy_returns_read_only(self):
+        sig = Signal(np.zeros(4), sample_rate=4)
+        arr = sig.to_numpy(copy=False)
+        with pytest.raises(ValueError):
+            arr[0] = 1.0
+
+    def test_to_numpy_default_is_writable_copy(self):
+        sig = Signal(np.zeros(4), sample_rate=4)
+        arr = sig.to_numpy()
+        arr[0] = 1.0  # must not raise
+        assert sig.data[0] == 0.0
+
+
 class TestFloatSampleRates:
     def test_sub_one_hz_rate(self):
         sig = Signal(np.ones(10), sample_rate=0.5)
