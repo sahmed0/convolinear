@@ -244,37 +244,54 @@ class Spectrum:
 
         return Signal(np.fft.irfft(self._coefficients, n=self._n_samples), self._sample_rate)
 
+    @classmethod
+    def from_magnitudes(
+        cls, magnitudes: npt.ArrayLike, frequencies: npt.ArrayLike, sample_rate: float
+    ) -> Self:
+        """Build a zero-phase Spectrum from a magnitude spectrum (synthesis).
+
+        Reverses the library's amplitude convention to produce real, zero-phase
+        rfft coefficients: every component becomes a cosine. This replaces the
+        lossy v0.1.0 ``to_signal(sample_rate)`` pathway and keeps spectral-shaping
+        and synthesis workflows possible now that :meth:`Signal.fft` round-trips
+        exactly.
 
         Each magnitude is placed at its true frequency, derived from the bin
-        spacing, so a sub-band Spectrum (e.g. one returned by :meth:`in_range`)
-        synthesises back at the correct frequencies rather than being shifted
-        down to DC. A Spectrum produced by ``Signal.fft(window=...)`` carries
-        the window's coherent-gain correction, so its reconstructed amplitudes
-        will be scaled by that window and are not directly recoverable.
+        spacing, so a sub-band magnitude spectrum synthesises back at the correct
+        frequencies rather than being shifted down to DC. The returned spectrum's
+        frequency axis is the *full* rfft grid for the recovered signal length,
+        even if the input covered only a sub-band.
 
         Args:
-            sample_rate: Sample rate of the output Signal in Hz.
+            magnitudes:  Magnitudes in the library's convention (unit sine ~ 1).
+            frequencies: The frequency of each magnitude in Hz, evenly spaced and
+                         increasing.
+            sample_rate: Sample rate of the synthesised signal in Hz.
 
         Returns:
-            A Signal whose frequency content matches these magnitudes.
+            A zero-phase Spectrum whose :meth:`to_signal` is a cosine synthesis
+            of the given magnitudes.
 
         Raises:
-            ValueError: if the Spectrum has fewer than two bins (the bin
-                spacing, and hence the signal length, cannot be inferred).
+            ValueError: if there are fewer than two bins (the bin spacing, and
+                hence the signal length, cannot be inferred), the frequencies are
+                not evenly spaced and increasing, or ``sample_rate`` is too low
+                for the bin spacing.
         """
-        from .signal import Signal
+        mags = np.asarray(magnitudes, dtype=np.float64)
+        freqs = np.asarray(frequencies, dtype=np.float64)
 
-        if len(self.magnitudes) < 2:
+        if len(mags) < 2:
             raise ValueError(
                 "Need at least two frequency bins to reconstruct a signal; "
-                f"got {len(self.magnitudes)}. A single-bin Spectrum carries no "
+                f"got {len(mags)}. A single-bin magnitude spectrum carries no "
                 "recoverable time-domain information."
             )
 
-        # Recover the FFT bin spacing (Hz/bin). Frequencies from Signal.fft()
-        # are evenly spaced, so the spacing plus the target sample rate fix the
-        # full transform length - which also recovers odd original lengths.
-        df = float(self.frequencies[1] - self.frequencies[0])
+        # Recover the FFT bin spacing (Hz/bin). Evenly spaced frequencies plus
+        # the target sample rate fix the full transform length - which also
+        # recovers odd original lengths.
+        df = float(freqs[1] - freqs[0])
         if df <= 0:
             raise ValueError("Spectrum frequencies must be evenly spaced and increasing.")
         n_full = round(sample_rate / df)
@@ -286,19 +303,20 @@ class Spectrum:
         n_bins = n_full // 2 + 1
 
         # Scatter each magnitude into its true rfft bin; bins absent from this
-        # Spectrum (e.g. dropped by in_range) stay zero.
+        # input (e.g. a sub-band) stay zero.
         coeffs = np.zeros(n_bins, dtype=complex)
-        bin_indices = np.round(self.frequencies / df).astype(int)
+        bin_indices = np.round(freqs / df).astype(int)
         in_bounds = (bin_indices >= 0) & (bin_indices < n_bins)
-        # Undo the interior-bin 2/n normalisation applied in Signal.fft().
-        coeffs[bin_indices[in_bounds]] = self.magnitudes[in_bounds] * n_full / 2.0
-        # fft() stores DC (and, for even n, Nyquist) un-doubled, so scale those
-        # bins back up to their full rfft coefficient.
+        # Undo the interior-bin 2/n normalisation of the magnitude convention.
+        coeffs[bin_indices[in_bounds]] = mags[in_bounds] * n_full / 2.0
+        # The convention stores DC (and, for even n, Nyquist) un-doubled, so
+        # scale those bins back up to their full rfft coefficient.
         coeffs[0] *= 2.0
         if n_full % 2 == 0:
             coeffs[-1] *= 2.0
-        data = np.fft.irfft(coeffs, n=n_full)
-        return Signal(data, sample_rate)
+
+        freq_axis = np.fft.rfftfreq(n_full, d=1.0 / sample_rate)
+        return cls(coeffs, freq_axis, n_full, sample_rate)
 
     def plot(
         self,

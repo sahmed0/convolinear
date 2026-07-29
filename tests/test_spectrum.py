@@ -228,3 +228,33 @@ class TestInRangeBrickWall:
         out_of_band = (sub.frequencies < 100) | (sub.frequencies > 1000)
         assert np.all(sub.magnitudes[out_of_band] == 0.0)
 
+
+class TestFromMagnitudes:
+    def test_reproduces_v01_cosine_synthesis(self):
+        # A single magnitude of 1.0 at 500 Hz should synthesise a unit-amplitude
+        # cosine at 500 Hz.
+        sample_rate = 8000.0
+        freqs = np.fft.rfftfreq(8000, d=1.0 / sample_rate)
+        mags = np.zeros_like(freqs)
+        mags[np.argmin(np.abs(freqs - 500))] = 1.0
+        sig = Spectrum.from_magnitudes(mags, freqs, sample_rate).to_signal()
+        assert float(np.max(np.abs(sig.data))) == pytest.approx(1.0, abs=1e-6)
+        assert sig.fft().peak_frequency == pytest.approx(500, abs=1)
+
+    def test_full_axis_from_subband_input(self):
+        sample_rate = 8000.0
+        freqs = np.fft.rfftfreq(8000, d=1.0 / sample_rate)
+        # Take only a sub-band as input; the synthesised spectrum spans the full
+        # rfft grid and places the tone at its true frequency.
+        band = (freqs >= 400) & (freqs <= 600)
+        mags = np.zeros(band.sum())
+        sub_freqs = freqs[band]
+        mags[np.argmin(np.abs(sub_freqs - 500))] = 1.0
+        spec = Spectrum.from_magnitudes(mags, sub_freqs, sample_rate)
+        assert spec.frequencies[0] == 0.0
+        assert spec.to_signal().fft().peak_frequency == pytest.approx(500, abs=1)
+
+    def test_rejects_single_bin(self):
+        with pytest.raises(ValueError, match="at least two"):
+            Spectrum.from_magnitudes(np.array([1.0]), np.array([0.0]), 8000.0)
+
