@@ -38,6 +38,7 @@ class PeakResult:
 # imports Spectrum/Spectrogram only at type-check time so fft()/spectrogram()
 # don't create a circular import
 if TYPE_CHECKING:
+    from .power_spectrum import PowerSpectrum
     from .spectrogram import Spectrogram
     from .spectrum import Spectrum
 
@@ -1146,6 +1147,64 @@ class Signal:
             last = -1 if nperseg % 2 == 0 else None
             mags[1:last] *= 2.0
         return Spectrogram(frequencies, times, mags)
+
+    def psd(
+        self,
+        segment_length: int = 256,
+        overlap: float = 0.5,
+        window: WindowName = "hann",
+    ) -> PowerSpectrum:
+        """Estimate the power spectral density with Welch's method.
+
+        Averages the periodograms of overlapping windowed segments, trading
+        frequency resolution for a statistically consistent estimate - the
+        standard choice for noisy data, where a single-shot FFT periodogram
+        has variance that does not shrink with signal length.
+
+        Args:
+            segment_length: Number of samples per Welch segment. Larger values
+                            give finer frequency resolution but a noisier
+                            (less-averaged) estimate. Defaults to 256.
+            overlap:        Fraction of overlap between consecutive segments,
+                            in ``[0, 1)``. Defaults to 0.5 (50%).
+            window:         Window applied to each segment. Accepted values are
+                            ``"hann"`` (default), ``"hamming"``, ``"blackman"``
+                            and ``"bartlett"``.
+
+        Returns:
+            A PowerSpectrum: power density (units^2 / Hz) indexed by frequency.
+
+        Example::
+
+            # Find the dominant cycle of a noisy signal
+            sig = Signal.sine(50, 5.0, 1000) + Signal.noise(5.0, 1000, seed=0)
+            sig.psd().peak_frequency  # ~50
+
+        Raises:
+            ValueError: if ``window`` is unrecognised, ``overlap`` is not in
+                ``[0, 1)``, or ``segment_length`` is less than 1.
+        """
+        from .power_spectrum import PowerSpectrum
+
+        key = Signal._validate_window(window)
+        if not 0.0 <= overlap < 1.0:
+            raise ValueError(f"overlap must be in [0, 1), got {overlap}.")
+        if int(segment_length) < 1:
+            raise ValueError(f"segment_length must be a positive integer, got {segment_length}.")
+
+        # Never request a segment longer than the signal itself.
+        nperseg = min(int(segment_length), len(self.data))
+        noverlap = int(nperseg * overlap)
+
+        frequencies, pxx = scipy_signal.welch(
+            self.data,
+            fs=self.sample_rate,
+            window=key,
+            nperseg=nperseg,
+            noverlap=noverlap,
+            scaling="density",
+        )
+        return PowerSpectrum(frequencies, pxx)
 
     # --- Input/Output & visualisation ---
 
