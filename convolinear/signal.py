@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import math
+import os
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
 
 import numpy as np
 import numpy.typing as npt
 from scipy import signal as scipy_signal
 from scipy.io import loadmat, wavfile
+
+WindowName = Literal["hann", "hamming", "blackman", "bartlett"]
+ConvolveMode = Literal["full", "same", "valid"]
 
 
 @dataclass(frozen=True)
@@ -24,10 +29,10 @@ class PeakResult:
     of peaks via ``len(result)``.
     """
 
-    times: np.ndarray
-    heights: np.ndarray
+    times: npt.NDArray[np.float64]
+    heights: npt.NDArray[np.float64]
 
-    def __iter__(self) -> Iterator[np.ndarray]:
+    def __iter__(self) -> Iterator[npt.NDArray[np.float64]]:
         yield self.times
         yield self.heights
 
@@ -38,6 +43,9 @@ class PeakResult:
 # imports Spectrum/Spectrogram only at type-check time so fft()/spectrogram()
 # don't create a circular import
 if TYPE_CHECKING:
+    import pandas as pd
+    from matplotlib.axes import Axes
+
     from .power_spectrum import PowerSpectrum
     from .spectrogram import Spectrogram
     from .spectrum import Spectrum
@@ -104,7 +112,7 @@ class Signal:
     # --- Constructors ---
 
     @classmethod
-    def from_wav(cls, path: str) -> Signal:
+    def from_wav(cls, path: str | os.PathLike[str]) -> Self:
         """Load a signal from a WAV file. Stereo files are converted to mono."""
         sample_rate, raw = wavfile.read(path)
         original_dtype = raw.dtype
@@ -123,7 +131,7 @@ class Signal:
         return cls(data, sample_rate)
 
     @classmethod
-    def from_audio(cls, path: str) -> Signal:
+    def from_audio(cls, path: str | os.PathLike[str]) -> Self:
         """Load a signal from an audio file (WAV,FLAC, MP3, OGG, and others)."""
         try:
             import soundfile as sf
@@ -199,7 +207,7 @@ class Signal:
     @classmethod
     def from_csv(
         cls,
-        path: str,
+        path: str | os.PathLike[str],
         value_column: str,
         time_column: str | None = None,
         sample_rate: float | None = None,
@@ -255,7 +263,7 @@ class Signal:
     @classmethod
     def from_parquet(
         cls,
-        path: str,
+        path: str | os.PathLike[str],
         value_column: str,
         time_column: str | None = None,
         sample_rate: float | None = None,
@@ -312,7 +320,7 @@ class Signal:
     @classmethod
     def from_numpy(
         cls,
-        array: np.ndarray | str,
+        array: npt.NDArray[np.float64] | str | os.PathLike[str],
         sample_rate: float,
         column: int | None = None,
     ) -> Self:
@@ -340,8 +348,8 @@ class Signal:
             # Multi-channel array - pick channel 1
             Signal.from_numpy(multichannel_array, sample_rate=1000, column=1)
         """
-        if isinstance(array, str):
-            path = array
+        if isinstance(array, (str, os.PathLike)):
+            path = os.fspath(array)
             if path.endswith(".npz"):
                 archive = np.load(path)
                 keys = list(archive.keys())
@@ -450,7 +458,7 @@ class Signal:
     @classmethod
     def from_matlab(
         cls,
-        path: str,
+        path: str | os.PathLike[str],
         variable: str | None = None,
         sample_rate_variable: str | None = None,
         sample_rate: float | None = None,
@@ -605,7 +613,7 @@ class Signal:
         return len(self.data) / self.sample_rate
 
     @property
-    def time_axis(self) -> np.ndarray:
+    def time_axis(self) -> npt.NDArray[np.float64]:
         """Array of time values for each sample, in seconds."""
         return np.arange(len(self.data)) / self.sample_rate
 
@@ -845,7 +853,12 @@ class Signal:
         """
         return self._butter_filter([low, high], order, btype="bandstop")
 
-    def _butter_filter(self, cutoff: float | list, order: int, btype: str) -> Signal:
+    def _butter_filter(
+        self,
+        cutoff: float | Sequence[float],
+        order: int,
+        btype: Literal["low", "high", "band", "bandstop"],
+    ) -> Signal:
         nyquist = self.sample_rate / 2
         normalized = np.asarray(cutoff) / nyquist
         if np.any(normalized >= 1) or np.any(normalized <= 0):
@@ -872,7 +885,7 @@ class Signal:
         resampled = np.asarray(scipy_signal.resample(self.data, new_n))
         return Signal(resampled, new_sample_rate)
 
-    def _coerce_other(self, other: Signal | np.ndarray, op: str) -> np.ndarray:
+    def _coerce_other(self, other: Signal | npt.ArrayLike, op: str) -> npt.NDArray[np.float64]:
         """Return the sample array of ``other`` for a two-signal operation.
 
         Accepts either another Signal (whose sample rate must match) or a raw
@@ -890,7 +903,7 @@ class Signal:
             raise ValueError(f"Expected a Signal or 1-D array for {op}, got shape {arr.shape}.")
         return arr
 
-    def convolve(self, other: Signal | np.ndarray, mode: str = "full") -> Signal:
+    def convolve(self, other: Signal | npt.ArrayLike, mode: ConvolveMode = "full") -> Signal:
         """Convolve this signal with another signal or a kernel.
 
         Convolution is the operation behind FIR filtering: passing a kernel
@@ -927,7 +940,7 @@ class Signal:
         result = scipy_signal.fftconvolve(self.data, kernel, mode=mode)
         return Signal(np.asarray(result), self.sample_rate)
 
-    def correlate(self, other: Signal | np.ndarray, mode: str = "full") -> Signal:
+    def correlate(self, other: Signal | npt.ArrayLike, mode: ConvolveMode = "full") -> Signal:
         """Cross-correlate this signal with another signal or array.
 
         Cross-correlation measures how similar two signals are as one is slid
@@ -949,7 +962,7 @@ class Signal:
         result = scipy_signal.correlate(self.data, other_data, mode=mode)
         return Signal(np.asarray(result), self.sample_rate)
 
-    def time_delay(self, other: Signal | np.ndarray) -> float:
+    def time_delay(self, other: Signal | npt.ArrayLike) -> float:
         """Estimate the time delay (in seconds) between this signal and ``other``.
 
         Finds the lag of the cross-correlation peak and converts it to seconds.
@@ -1015,7 +1028,7 @@ class Signal:
         indices, _ = scipy_signal.find_peaks(self.data, height=min_height, distance=distance)
         return PeakResult(indices / self.sample_rate, self.data[indices])
 
-    _FFT_WINDOWS: ClassVar[dict[str, Callable[[int], np.ndarray]]] = {
+    _FFT_WINDOWS: ClassVar[dict[str, Callable[[int], npt.NDArray[np.float64]]]] = {
         "hann": np.hanning,
         "hamming": np.hamming,
         "blackman": np.blackman,
@@ -1023,7 +1036,7 @@ class Signal:
     }
 
     @classmethod
-    def _validate_window(cls, window: str) -> str:
+    def _validate_window(cls, window: str) -> WindowName:
         """Normalise and validate a window name against the supported set.
 
         Returns the lower-cased key. Shared by :meth:`window`, :meth:`fft` and
@@ -1035,10 +1048,10 @@ class Signal:
             raise ValueError(
                 f"Unknown window '{window}'. Choose from: {', '.join(cls._FFT_WINDOWS)}."
             )
-        return key
+        return cast(WindowName, key)
 
     # NOTE: Spectrum doesn't need quotes due to if TYPE_CHECKING import
-    def fft(self, window: str | None = None) -> Spectrum:
+    def fft(self, window: WindowName | None = None) -> Spectrum:
         """Convert to the frequency domain via FFT.
 
         Args:
@@ -1084,7 +1097,7 @@ class Signal:
         self,
         segment_length: int = 256,
         overlap: float = 0.5,
-        window: str = "hann",
+        window: WindowName = "hann",
     ) -> Spectrogram:
         """Compute a spectrogram via the short-time Fourier transform (STFT).
 
@@ -1208,6 +1221,7 @@ class Signal:
 
     # --- Input/Output & visualisation ---
 
+    def to_wav(self, path: str | os.PathLike[str]) -> Self:
         """Save the signal as a 16-bit WAV file. Returns self for chaining.
 
         Raises:
@@ -1227,7 +1241,7 @@ class Signal:
         wavfile.write(path, int(self.sample_rate), int_data)
         return self
 
-    def to_numpy(self, include_time: bool = False, copy: bool = True) -> np.ndarray:
+    def to_numpy(self, include_time: bool = False, copy: bool = True) -> npt.NDArray[np.float64]:
         """Export the signal's samples as a NumPy array.
 
         This is the way out of the Signal pipeline back into plain NumPy: hand
@@ -1265,7 +1279,7 @@ class Signal:
         value_column: str = "amplitude",
         time_column: str | None = "time",
         time_index: bool = False,
-    ):
+    ) -> pd.DataFrame:
         """Export the signal to a pandas DataFrame for further analysis.
 
         The returned DataFrame has one row per sample, with the amplitude in
@@ -1313,7 +1327,7 @@ class Signal:
                 index=pd.Index(self.time_axis, name=time_column),
             )
 
-        columns = {}
+        columns: dict[str, npt.NDArray[np.float64]] = {}
         if time_column is not None:
             columns[time_column] = self.time_axis
         columns[value_column] = self.data
@@ -1324,8 +1338,8 @@ class Signal:
         title: str | None = None,
         xlabel: str | None = None,
         ylabel: str | None = None,
-        ax=None,
-    ):
+        ax: Axes | None = None,
+    ) -> Axes:
         """Plot the signal in the time domain. Returns the matplotlib axis."""
         import matplotlib.pyplot as plt
 

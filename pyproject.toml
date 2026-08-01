@@ -85,3 +85,14 @@ select = ["E", "F", "W", "I", "UP", "B", "NPY", "RUF"]
 
 [tool.coverage.run]
 source = ["convolinear"]
+
+[tool.mypy]
+files = ["convolinear"]
+# scipy-stubs ships PEP 695 `type` statements that mypy only parses under 3.12+;
+# the package itself still targets 3.11+ and uses no 3.12-only syntax.
+python_version = "3.12"
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["soundfile"]
+ignore_missing_imports = true
