@@ -16,7 +16,7 @@ class TestSignalConstruction:
         assert sig.duration == 1.0
 
     def test_rejects_2d_data(self):
-        with pytest.raises(ValueError, match="must be 1D"):
+        with pytest.raises(ValueError, match="must be 1-D"):
             Signal(np.array([[1.0, 2.0], [3.0, 4.0]]), sample_rate=2)
 
     def test_rejects_negative_sample_rate(self):
