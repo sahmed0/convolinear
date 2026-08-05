@@ -34,6 +34,11 @@ class TestSpectrogram:
         with pytest.raises(ValueError):
             spec.magnitudes[0, 0] = 1.0
 
+    def test_construction_does_not_freeze_callers_array(self):
+        mags = np.ones((2, 2))
+        spec = Spectrogram(np.array([0.0, 1.0]), np.array([0.0, 1.0]), mags)
+        mags[0, 0] = 5.0  # caller still owns their array
+        assert spec.magnitudes[0, 0] == 1.0
 
     def test_frequency_axis_spans_to_nyquist(self):
         sig = Signal.sine(1000, duration=1.0, sample_rate=8000)
