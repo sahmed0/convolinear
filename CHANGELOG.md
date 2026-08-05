@@ -65,6 +65,20 @@ changes and no compatibility shims; the notes below are the migration path.
 
 ## [0.1.0] - 2026-05-22
 
+> **Note on project history:** `convolinear` was originally published
+> under a different name and retired due to a trademark conflict. Then
+> it was renamed and the source code was migrated here as a single commit,
+> which is why history starts fresh - and the v0.1.0 tag/release were
+> added retroactively, once I learned GitHub Releases existed.
+> Additionally, it was published to PyPi and conda-forge after the rename
+> but before the repo migration, so early timelines are out of sync.
+> 
+> Nevertheless, this is a learning project, and gaps like these are part
+> of the process, but they will become less common as I make progress
+> and improve my workflows.
+
 - Initial release: the `Signal`, `Spectrum` and `Spectrogram` classes, with a fluent API covering
   generation, WAV/CSV/Parquet/NumPy/MATLAB/pandas loading, filtering, mixing, convolution, correlation,
   peak finding, spectral analysis and plotting.
+
+[0.1.0]: https://github.com/sahmed0/convolinear/releases/tag/v0.1.0
