@@ -8,6 +8,8 @@ on:
       - 'LICENSE'
       - '.gitignore'
       - '**.png'
+      - 'docs/**'
+      - 'mkdocs.yml'
   pull_request:
     branches: [main]
     paths-ignore:
@@ -15,6 +17,8 @@ on:
       - 'LICENSE'
       - '.gitignore'
       - '**.png'
+      - 'docs/**'
+      - 'mkdocs.yml'
   workflow_dispatch:
 
 permissions:
