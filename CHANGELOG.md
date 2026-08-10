@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 A correctness and feature release. The frequency-domain classes were rebuilt so that a transform can be
-undone, several silent-wrong-answer bugs were fixed, and every claim the package makes — its typing
-marker, its Python support matrix — is now backed by something that runs in CI. There are breaking
+undone, several silent-wrong-answer bugs were fixed. Furthermore, GitHub Actions CI has been set up to enforce strict typing and testing across multiple Python versions and operating systems. There are breaking
 changes and no compatibility shims; the notes below are the migration path.
 
 ### Added
