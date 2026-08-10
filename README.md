@@ -96,6 +96,7 @@ print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")   # Dominant period: 
   raw signal to beats per minute.
 - [Daily data: finding slow cycles](https://sahmed0.github.io/convolinear/examples/daily_cycles/) -
   sub-1 Hz sample rates.
+- [Benchmarks](https://sahmed0.github.io/convolinear/examples/benchmarks/) - measured throughput.
 - [CHANGELOG](CHANGELOG.md) - release history and migration notes.
 - [LICENSE](LICENSE) - MIT.
 
@@ -128,7 +129,3 @@ uv run pytest
 
 6. Commit changes to your fork.
 7. Open a Pull Request.
-
-## License
-
-MIT - see [LICENSE](LICENSE).
