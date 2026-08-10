@@ -74,3 +74,7 @@ Sample rates are floats, and rates below 1 Hz are fully supported - one sample p
 
 - [Quickstart](quickstart.md) - five worked snippets covering the common paths.
 - [API Reference](api/signal.md) - every public method, generated from the source.
+- [ECG: heart rate from raw samples](examples/ecg_heart_rate.ipynb) - the flagship walkthrough.
+- [Daily data: finding slow cycles](examples/daily_cycles.md) - sub-1 Hz sample rates.
+- [Benchmarks](examples/benchmarks.md) - measured convolution and filter throughput.
+- [Changelog](https://github.com/sahmed0/convolinear/blob/main/CHANGELOG.md)
