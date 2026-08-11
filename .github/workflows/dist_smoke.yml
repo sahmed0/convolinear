@@ -1,0 +1,55 @@
+name: Distribution smoke test
+
+# Manual trigger only. This builds the wheel and sdist and installs them into
+# about ten throwaway environments, which is too slow to sit in the
+# push/PR path. Run it manually from the Actions tab immediately before
+# publishing to PyPI.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  MPLBACKEND: Agg
+
+jobs:
+  smoke:
+    strategy:
+      # Never cancel the other platforms: which OS fails is the whole point.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # Three interpreters on a cold cache - 3.13 in the setup step below, plus
+    # the 3.11 and 3.14 the script fetches for its two pinned cases - and ten
+    # environments, some pulling matplotlib/pandas/pyarrow/soundfile. A healthy
+    # run is well under half this; the script's own per-subprocess timeout is
+    # what catches a hang, so reaching this ceiling means something is wrong.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      # Two of the script's cases pin their own interpreter: 3.11 for the
+      # dependency-floor case, which is also what covers the declared Python
+      # floor, and 3.14 for the highest classified version. The rest run on
+      # whatever uv picks up, i.e. the 3.13 installed above. The script itself
+      # is stdlib-only, hence --no-project: no dev sync needed.
+      - run: uv run --no-project --python 3.13 scripts/smoke_test_dist.py
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: dist-${{ matrix.os }}
+          path: dist/
+          retention-days: 7
