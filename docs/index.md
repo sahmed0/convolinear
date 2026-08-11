@@ -19,7 +19,7 @@ Signal.from_wav("audio.wav").bandpass(300, 3000).normalize().fft().plot()
 
 ## Install
 
-**Core requirements:** Python 3.11+, NumPy >= 1.23.2, SciPy >= 1.8
+**Core requirements:** Python 3.11+, NumPy >= 1.23.2, SciPy >= 1.9.2
 
 **Optional dependencies** unlock the following loaders and features:
 

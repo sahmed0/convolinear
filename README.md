@@ -2,9 +2,9 @@
 [![MIT License](https://img.shields.io/badge/MIT-2026_Sajid_Ahmed-limegreen.svg)](https://opensource.org/license/mit)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org/)
 
-# convolinear
+# convolinear - Fluent Signal Processing for Python
 
-A clean, chainable Python library for digital signal processing.
+Fluent signal processing for Python, one line at a time.
 
 `convolinear` wraps the power of NumPy and SciPy in a fluent, readable API. Common DSP tasks -
 loading audio, filtering, mixing, and spectral analysis - become short, expressive one-liners
@@ -18,12 +18,12 @@ Signal.from_wav("audio.wav").bandpass(300, 3000).normalize().fft().plot()
 ```
 
 <p align="center">
-  <img src="https://github.com/sahmed0/convolinear/blob/main/demo_output.png?raw=true" alt="demo.py output graphs" width="700">
+  <img src="https://github.com/sahmed0/convolinear/blob/main/demo_output.png?raw=true" alt="convolinear signal processing pipeline result: bandpass filter, normalize, and FFT plot of an audio signal" width="700">
 </p>
 
 ## Installation
 
-**Core requirements:** Python 3.11+, NumPy >= 1.23.2, SciPy >= 1.8
+**Core requirements:** Python 3.11+, NumPy >= 1.23.2, SciPy >= 1.9.2
 
 **Optional dependencies** unlock the following loaders and features:
 
@@ -126,8 +126,7 @@ print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")   # Dominant period: 
 - [Daily data: finding slow cycles](https://sahmed0.github.io/convolinear/examples/daily_cycles/) -
   sub-1 Hz sample rates.
 - [Benchmarks](https://sahmed0.github.io/convolinear/examples/benchmarks/) - measured throughput.
-- [CHANGELOG](CHANGELOG.md) - release history and migration notes.
-- [LICENSE](LICENSE) - MIT.
+- [CHANGELOG](https://github.com/sahmed0/convolinear/blob/main/CHANGELOG.md) - release history and migration notes.
 
 Runnable scripts live in [`examples/`](https://github.com/sahmed0/convolinear/tree/main/examples).
 
@@ -158,3 +157,9 @@ uv run pytest
 
 6. Commit changes to your fork.
 7. Open a Pull Request.
+
+## License
+
+This project is licensed under the [MIT License](https://github.com/sahmed0/convolinear/blob/main/LICENSE).
+
+Copyright © 2026 Sajid Ahmed
