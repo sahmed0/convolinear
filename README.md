@@ -129,7 +129,7 @@ print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")   # Dominant period: 
 - [CHANGELOG](CHANGELOG.md) - release history and migration notes.
 - [LICENSE](LICENSE) - MIT.
 
-Runnable scripts live in [`examples/`](examples/).
+Runnable scripts live in [`examples/`](https://github.com/sahmed0/convolinear/tree/main/examples).
 
 ## Development
 
