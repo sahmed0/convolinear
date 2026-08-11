@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-08-11
 
 A correctness and feature release. The frequency-domain classes were rebuilt so that a transform can be
 undone, several silent-wrong-answer bugs were fixed. Furthermore, GitHub Actions CI has been set up to enforce strict typing and testing across multiple Python versions and operating systems. There are breaking
@@ -81,3 +81,4 @@ changes and no compatibility shims; the notes below are the migration path.
   peak finding, spectral analysis and plotting.
 
 [0.1.0]: https://github.com/sahmed0/convolinear/releases/tag/v0.1.0
+[0.2.0]: https://github.com/sahmed0/convolinear/releases/tag/v0.2.0
