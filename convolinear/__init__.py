@@ -1,7 +1,4 @@
-"""convolinear - A fluent time-series and signal processing library.
-
-Build data pipelines in a single line of Python.
-"""
+"""convolinear - Fluent signal processing for Python, one line at a time."""
 
 from .power_spectrum import PowerSpectrum
 from .signal import PeakResult, Signal

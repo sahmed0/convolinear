@@ -1,5 +1,5 @@
 site_name: convolinear
-site_description: A fluent time-series and signal processing library.
+site_description: Fluent signal processing and time-series analysis for Python - FFT, filtering, spectrograms, and peak detection in one line.
 site_url: https://convolinear.sajidahmed.co.uk/
 repo_url: https://github.com/sahmed0/convolinear
 theme:

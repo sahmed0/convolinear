@@ -13,14 +13,32 @@ packages = ["convolinear"]
 [project]
 name = "convolinear"
 version = "0.2.0"
-description = "A fluent time-series and signal processing library for building data pipelines in a single line of Python."
+description = "Fluent signal processing for Python, one line at a time."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Sajid Ahmed", email = "bracer.chasm-8i@icloud.com" },
 ]
-keywords = ["fluent", "data", "time-series", "signal-processing", "dsp", "audio", "fft", "filter"]
+keywords = [
+    "signal-processing",
+    "dsp",
+    "time-series",
+    "fft",
+    "spectral-analysis",
+    "spectrogram",
+    "power-spectrum",
+    "filter",
+    "filtering",
+    "peak-detection",
+    "frequency-domain",
+    "audio-processing",
+    "numpy",
+    "scipy",
+    "pandas",
+    "fluent-interface",
+    "data-pipeline",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Typing :: Typed",
@@ -33,6 +51,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
 ]
 dependencies = [
     "numpy>=1.23.2",
