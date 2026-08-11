@@ -23,15 +23,9 @@ Signal.from_wav("audio.wav").bandpass(300, 3000).normalize().fft().plot()
 
 ## Installation
 
-```bash
-pip install convolinear
-```
+**Core requirements:** Python 3.11+, NumPy >= 1.23.2, SciPy >= 1.8
 
-Optional extras unlock the loaders and features you need:
-
-```bash
-pip install "convolinear[plot,audio,pandas]"
-```
+**Optional dependencies** unlock the following loaders and features:
 
 | Extra | Packages installed | Unlocks |
 |-------|--------------------|---------|
@@ -41,7 +35,42 @@ pip install "convolinear[plot,audio,pandas]"
 
 MATLAB `.mat` files load through SciPy, already a core dependency - no extra needed.
 
-**Core requirements:** Python 3.11+, NumPy >= 1.23.2, SciPy >= 1.8
+### With pip
+
+`convolinear` is published on [PyPi](https://pypi.org/project/convolinear):
+
+```bash
+pip install convolinear
+```
+
+```bash
+pip install "convolinear[plot,audio,pandas]"
+```
+
+### With conda
+
+`convolinear` is published on [conda-forge](https://anaconda.org/conda-forge/convolinear):
+
+```bash
+conda install -c conda-forge convolinear
+```
+
+conda-forge packages don't support pip-style extras - install the optional dependencies as
+separate packages instead:
+
+```bash
+conda install -c conda-forge convolinear matplotlib soundfile pandas pyarrow
+```
+
+### With uv
+
+```bash
+uv add convolinear
+```
+
+```bash
+uv add "convolinear[plot,audio,pandas]"
+```
 
 ## Quickstart
 
