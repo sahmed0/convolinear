@@ -1,0 +1,33 @@
+site_name: convolinear
+site_description: A fluent time-series and signal processing library.
+site_url: https://convolinear.sajidahmed.co.uk/
+repo_url: https://github.com/sahmed0/convolinear
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle: { icon: material/brightness-7, name: Dark mode }
+    - scheme: slate
+      toggle: { icon: material/brightness-4, name: Light mode }
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            members_order: source
+            show_source: true
+  - mkdocs-jupyter
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - API Reference:
+      - Signal: api/signal.md
+      - Spectrum: api/spectrum.md
+      - PowerSpectrum: api/power_spectrum.md
+      - Spectrogram: api/spectrogram.md
+  - Examples:
+      - "ECG: heart rate from raw samples": examples/ecg_heart_rate.ipynb
+      - "Daily data: finding slow cycles": examples/daily_cycles.md
+      - Benchmarks: examples/benchmarks.md

@@ -1,0 +1,3 @@
+# Spectrum
+
+::: convolinear.Spectrum
