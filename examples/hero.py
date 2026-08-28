@@ -32,9 +32,7 @@ ref = Signal.from_function(
 
 # Received signal: the echo returns at 1.40 s at 0.7x amplitude, buried in white
 # noise about 3 dB louder than the echo itself.
-echo = np.concatenate(
-    [np.zeros(round(TRUE_DELAY * SR)), 0.7 * ref.data, np.zeros(round(0.9 * SR))]
-)
+echo = np.concatenate([np.zeros(round(TRUE_DELAY * SR)), 0.7 * ref.data, np.zeros(round(0.9 * SR))])
 received = Signal(echo + Signal.noise(len(echo) / SR, SR, amplitude=1.0, seed=1).data, SR)
 
 # --- Process the data --------------------------------------------------------
@@ -45,9 +43,7 @@ estimate = received.time_delay(ref)
 # --- Render ------------------------------------------------------------------
 
 plt.rcParams.update({"font.size": 11, "axes.titlesize": 12, "axes.titleweight": "bold"})
-fig, (top, bottom) = plt.subplots(
-    2, 1, figsize=(12, 6), gridspec_kw={"height_ratios": [1.15, 1]}
-)
+fig, (top, bottom) = plt.subplots(2, 1, figsize=(12, 6), gridspec_kw={"height_ratios": [1.15, 1]})
 
 received.spectrogram(segment_length=256, overlap=0.85).plot(
     max_freq=3800,
@@ -78,9 +74,7 @@ bottom.annotate(
     arrowprops={"arrowstyle": "-", "color": "#e03030", "lw": 1.2},
 )
 
-fig.suptitle(
-    "convolinear  -  fluent signal processing for Python", fontsize=15, fontweight="bold"
-)
+fig.suptitle("convolinear  -  fluent signal processing for Python", fontsize=15, fontweight="bold")
 fig.tight_layout(rect=(0, 0, 1, 0.97))
 fig.savefig(OUT, dpi=160)
 print(f"wrote {OUT}  (true delay {TRUE_DELAY * 1000:.0f} ms, estimated {estimate * 1000:.0f} ms)")
