@@ -10,13 +10,14 @@
 Fluent signal processing for Python, one line at a time.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sahmed0/convolinear/main/docs/assets/hero.png" alt="convolinear pulse compression: a chirp echo buried 3 dB under white noise in a spectrogram, recovered as a single correlation spike at 1400 ms" width="900">
+  <img src="https://raw.githubusercontent.com/sahmed0/convolinear/main/docs/assets/hero.png" alt="convolinear pulse compression: the same chirp echo shown at -6 dB SNR, where the sweep is still visible in a spectrogram, and at -20 dB SNR, where it is not; one correlate() call recovers the 1400 ms round-trip delay in both cases" width="900">
 </p>
 
 <p align="center">
-  <em>Pulse compression - the core of every radar, sonar and GPS receiver. A chirp echo sits 3 dB
-  under the noise floor; one <code>correlate()</code> call collapses it into a spike at the exact
-  round-trip delay. Reproduce with <code>python examples/hero.py</code>.</em>
+  <em>Pulse compression - the core of every radar, sonar and GPS receiver. The same echo is shown
+  at -6 dB and at -20 dB SNR (echo power against noise power). At -20 dB the spectrogram shows
+  nothing at all, and one <code>correlate()</code> call still collapses the echo into a spike at
+  the exact round-trip delay. Reproduce with <code>python examples/hero.py</code>.</em>
 </p>
 
 `convolinear` wraps the power of NumPy and SciPy in a fluent, readable API. Common DSP tasks -
