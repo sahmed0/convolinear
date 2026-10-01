@@ -21,7 +21,12 @@ from convolinear import Signal
 
 SR = 44_100
 WORDMARK = "--wordmark" in sys.argv
-OUT = Path(__file__).parent.parent / ("social_card_wordmark.png" if WORDMARK else "social_card.png")
+OUT = (
+    Path(__file__).parent.parent
+    / "docs"
+    / "assets"
+    / ("social_card_wordmark.png" if WORDMARK else "social_card.png")
+)
 
 # Frame the spectrogram above the DC bin: the near-DC row reads as a hard orange
 # edge along the bottom of the plot rather than as signal.

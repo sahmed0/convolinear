@@ -3,6 +3,8 @@
 Run with: python examples/demo.py
 """
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 
 from convolinear import Signal
@@ -33,8 +35,10 @@ def main():
     cleaned.trim(0, 0.05).plot(title="After bandpass filter (first 50 ms)", ax=axes[1])
     spectrum.plot(title="Spectrum of cleaned signal", max_freq=2000, ax=axes[2])
     plt.tight_layout()
-    plt.savefig("demo_output.png", dpi=100)
-    print("\nPlot saved to demo_output.png")
+    out = Path(__file__).parent.parent / "docs" / "assets" / "demo_output.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(out, dpi=100)
+    print(f"\nPlot saved to {out}")
 
 
 if __name__ == "__main__":

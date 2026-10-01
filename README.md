@@ -1,13 +1,16 @@
+[![PyPI](https://img.shields.io/pypi/v/convolinear.svg)](https://pypi.org/project/convolinear/)
+[![conda-forge](https://img.shields.io/conda/vn/conda-forge/convolinear.svg)](https://anaconda.org/conda-forge/convolinear)
+[![Python](https://img.shields.io/pypi/pyversions/convolinear.svg)](https://pypi.org/project/convolinear/)
 [![CI](https://github.com/sahmed0/convolinear/actions/workflows/ci.yml/badge.svg)](https://github.com/sahmed0/convolinear/actions/workflows/ci.yml)
-[![MIT License](https://img.shields.io/badge/MIT-2026_Sajid_Ahmed-limegreen.svg)](https://opensource.org/license/mit)
-[![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org/)
+[![Docs](https://img.shields.io/badge/docs-convolinear.sajidahmed.co.uk-blue)](https://convolinear.sajidahmed.co.uk/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/sahmed0/convolinear/blob/main/LICENSE)
 
 # convolinear - Fluent Signal Processing for Python
 
 Fluent signal processing for Python, one line at a time.
 
 <p align="center">
-  <img src="https://github.com/sahmed0/convolinear/blob/main/hero.png?raw=true" alt="convolinear pulse compression: a chirp echo buried 3 dB under white noise in a spectrogram, recovered as a single correlation spike at 1400 ms" width="900">
+  <img src="https://raw.githubusercontent.com/sahmed0/convolinear/main/docs/assets/hero.png" alt="convolinear pulse compression: a chirp echo buried 3 dB under white noise in a spectrogram, recovered as a single correlation spike at 1400 ms" width="900">
 </p>
 
 <p align="center">
@@ -28,7 +31,7 @@ Signal.from_wav("audio.wav").bandpass(300, 3000).normalize().fft().plot()
 ```
 
 <p align="center">
-  <img src="https://github.com/sahmed0/convolinear/blob/main/demo_output.png?raw=true" alt="convolinear signal processing pipeline result: bandpass filter, normalize, and FFT plot of an audio signal" width="700">
+  <img src="https://raw.githubusercontent.com/sahmed0/convolinear/main/docs/assets/demo_output.png" alt="convolinear signal processing pipeline result: bandpass filter, normalize, and FFT plot of an audio signal" width="700">
 </p>
 
 ## Installation
@@ -129,13 +132,13 @@ print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")   # Dominant period: 
 
 ## Documentation
 
-- **[Full documentation and API reference](https://sahmed0.github.io/convolinear/)**
-- [Quickstart](https://sahmed0.github.io/convolinear/quickstart/) - five worked recipes.
-- [ECG: heart rate from raw samples](https://sahmed0.github.io/convolinear/examples/ecg_heart_rate/) -
+- **[Full documentation and API reference](https://convolinear.sajidahmed.co.uk/)**
+- [Quickstart](https://convolinear.sajidahmed.co.uk/quickstart/) - five worked recipes.
+- [ECG: heart rate from raw samples](https://convolinear.sajidahmed.co.uk/examples/ecg_heart_rate/) -
   raw signal to beats per minute.
-- [Daily data: finding slow cycles](https://sahmed0.github.io/convolinear/examples/daily_cycles/) -
+- [Daily data: finding slow cycles](https://convolinear.sajidahmed.co.uk/examples/daily_cycles/) -
   sub-1 Hz sample rates.
-- [Benchmarks](https://sahmed0.github.io/convolinear/examples/benchmarks/) - measured throughput.
+- [Benchmarks](https://convolinear.sajidahmed.co.uk/examples/benchmarks/) - measured throughput.
 - [CHANGELOG](https://github.com/sahmed0/convolinear/blob/main/CHANGELOG.md) - release history and migration notes.
 
 Runnable scripts live in [`examples/`](https://github.com/sahmed0/convolinear/tree/main/examples).

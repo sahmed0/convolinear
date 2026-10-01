@@ -2,6 +2,17 @@
 
 A clean, chainable Python library for digital signal processing.
 
+<p align="center">
+  <img src="assets/hero.png" alt="convolinear pulse compression: the same chirp echo shown at -6 dB SNR, where the sweep is still visible in a spectrogram, and at -20 dB SNR, where it is not; one correlate() call recovers the 1400 ms round-trip delay in both cases" width="900">
+</p>
+
+<p align="center">
+  <em>Pulse compression - the core of every radar, sonar and GPS receiver. The same echo is shown
+  at -6 dB and at -20 dB SNR (echo power against noise power). At -20 dB the spectrogram shows
+  nothing at all, and one <code>correlate()</code> call still collapses the echo into a spike at
+  the exact round-trip delay. Reproduce with <code>python examples/hero.py</code>.</em>
+</p>
+
 `convolinear` wraps the power of NumPy and SciPy in a fluent, readable API. Common DSP tasks -
 loading audio, filtering, mixing, and spectral analysis - become short, expressive one-liners
 instead of 10+ lines of boilerplate.
@@ -14,7 +25,7 @@ Signal.from_wav("audio.wav").bandpass(300, 3000).normalize().fft().plot()
 ```
 
 <p align="center">
-  <img src="demo_output.png" alt="Waveform, filtered waveform and spectrum plots" width="700">
+  <img src="assets/demo_output.png" alt="Waveform, filtered waveform and spectrum plots" width="700">
 </p>
 
 ## Install
