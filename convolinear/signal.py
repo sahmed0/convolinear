@@ -138,8 +138,9 @@ class Signal:
         except ImportError:
             raise ImportError(
                 "from_audio() requires the 'soundfile' package. "
-                "Install it with: pip install soundfile "
-                "MP3 support depends on libsndfile being compiled with MP3 support. "
+                "Install it with: pip install soundfile. "
+                "MP3 support additionally depends on libsndfile being compiled "
+                "with MP3 support."
             ) from None
         data, sample_rate = sf.read(path)
         data = data.astype(np.float64)
@@ -467,8 +468,8 @@ class Signal:
         """Load a signal from a MATLAB .mat file.
 
         Supports MATLAB files up to v7.2 (the large majority of .mat files).
-        For v7.3 files (saved with ``-v7.3`` in MATLAB, actually HDF5 format),
-        A ``from_hdf5`` constructor may be implemented in the future.
+        Files saved with ``-v7.3`` are HDF5 under the hood and are not
+        supported.
 
         Args:
             path:                  Path to the .mat file.
@@ -831,22 +832,61 @@ class Signal:
         return Signal(envelope, self.sample_rate)
 
     def lowpass(self, cutoff: float, order: int = 4) -> Signal:
-        """Apply a Butterworth low-pass filter. Cutoff in Hz."""
+        """Apply a zero-phase Butterworth low-pass filter. Cutoff in Hz.
+
+        The Butterworth design of the given ``order`` is applied forward and
+        then backward, with ``scipy.signal.sosfiltfilt``. That cancels phase
+        distortion entirely, but it also squares the magnitude response: the
+        gain at ``cutoff`` is -6.02 dB rather than the -3.01 dB of a single
+        pass (linear magnitude is squared so logarithmic dB is doubled), and the roll-off is that of
+        a filter of order ``2 * order``.
+        Because the backward pass reads the whole signal, the filter is
+        non-causal and cannot be used for streaming; reach for
+        ``scipy.signal.sosfilt`` when causality matters more than phase.
+
+        Args:
+            cutoff: Cutoff frequency in Hz. The response there is -6.02 dB.
+            order:  Order of the Butterworth design. The forward-backward pass
+                    doubles the effective order.
+
+        Raises:
+            ValueError: if ``cutoff`` is outside (0, Nyquist).
+        """
         return self._butter_filter(cutoff, order, btype="low")
 
     def highpass(self, cutoff: float, order: int = 4) -> Signal:
-        """Apply a Butterworth high-pass filter. Cutoff in Hz."""
+        """Apply a zero-phase Butterworth high-pass filter. Cutoff in Hz.
+
+        Zero-phase forward-backward filtering, exactly as :meth:`lowpass`: the
+        gain at ``cutoff`` is -6.02 dB, the effective order is ``2 * order``,
+        and the filter is non-causal.
+
+        Raises:
+            ValueError: if ``cutoff`` is outside (0, Nyquist).
+        """
         return self._butter_filter(cutoff, order, btype="high")
 
     def bandpass(self, low: float, high: float, order: int = 4) -> Signal:
-        """Apply a Butterworth band-pass filter. Frequencies in Hz."""
+        """Apply a zero-phase Butterworth band-pass filter. Frequencies in Hz.
+
+        Zero-phase forward-backward filtering, exactly as :meth:`lowpass`: the
+        gain at each band edge is -6.02 dB, the effective order is
+        ``2 * order``, and the filter is non-causal.
+
+        Raises:
+            ValueError: if either cutoff is outside (0, Nyquist).
+        """
         return self._butter_filter([low, high], order, btype="band")
 
     def bandstop(self, low: float, high: float, order: int = 4) -> Signal:
-        """Apply a Butterworth band-stop (notch) filter. Frequencies in Hz.
+        """Apply a zero-phase Butterworth band-stop (notch) filter. Frequencies in Hz.
 
         Attenuates the band between ``low`` and ``high`` Hz and passes
         everything outside it. The inverse of ``bandpass``.
+
+        Zero-phase forward-backward filtering, exactly as :meth:`lowpass`: the
+        gain at each band edge is -6.02 dB, the effective order is
+        ``2 * order``, and the filter is non-causal.
 
         Raises:
             ValueError: if either cutoff is outside (0, Nyquist).
@@ -867,6 +907,10 @@ class Signal:
                 f"Must be between 0 and {nyquist} Hz (Nyquist limit)."
             )
         sos = scipy_signal.butter(order, normalized, btype=btype, output="sos")
+        # Second-order sections, not (b, a): high-order and narrow-band IIR
+        # designs lose numerical accuracy badly in transfer-function form.
+        # sosfiltfilt runs the filter forward then backward - zero phase, at
+        # the cost of a squared magnitude response (see lowpass's docstring).
         filtered = scipy_signal.sosfiltfilt(sos, self.data)
         return Signal(filtered, self.sample_rate)
 
@@ -1065,6 +1109,13 @@ class Signal:
         ``magnitudes`` it exposes follow the same convention as before (a
         unit-amplitude sine reads ~1).
 
+        Note that the windows here are NumPy's **symmetric** windows
+        (``np.hanning`` etc), while :meth:`spectrogram` and :meth:`psd`
+        pass the window name to SciPy, which builds the **periodic** variant.
+        The two differ by one sample in the taper; periodic is the correct
+        choice for the overlap-add segmentation those two methods use, and the
+        difference is negligible for a one-shot transform of a long signal.
+
         Raises:
             ValueError: if ``window`` is not a recognised name.
         """
@@ -1105,6 +1156,11 @@ class Signal:
         Fourier-transformed, producing a picture of how the frequency content
         evolves over time. This is the standard tool for non-stationary
         signals - speech, music, chirps - whose spectrum changes as they play.
+
+        Each segment is detrended before transforming - SciPy's
+        ``detrend="constant"`` default, which subtracts the segment mean. A
+        constant offset in the signal therefore does not appear in the DC row.
+        Use :meth:`fft` if you need the DC component preserved.
 
         Args:
             segment_length: Number of samples per STFT segment. Larger values
@@ -1173,6 +1229,12 @@ class Signal:
         frequency resolution for a statistically consistent estimate - the
         standard choice for noisy data, where a single-shot FFT periodogram
         has variance that does not shrink with signal length.
+
+        Each segment is detrended before transforming - SciPy's
+        ``detrend="constant"`` default, which subtracts the segment mean. The
+        estimate therefore integrates to the signal's **variance**, not to its
+        mean square: a signal with a non-zero mean carries no DC power here.
+        Use :meth:`fft` if you need the DC component preserved.
 
         Args:
             segment_length: Number of samples per Welch segment. Larger values

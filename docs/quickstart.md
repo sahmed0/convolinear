@@ -27,8 +27,9 @@ rate is fractional.
 
 ## 2. Generate tones, mix them, find the peaks
 
-`+` mixes two signals of equal length. `top_n` returns true spectral peaks - local maxima found
-with `scipy.signal.find_peaks` - not just the largest bins.
+`+` mixes two signals by adding their samples; if they differ in length, the shorter one is
+zero-padded. `top_n` returns true spectral peaks - local maxima found with
+`scipy.signal.find_peaks` - not just the largest bins.
 
 ```python
 from convolinear import Signal
@@ -118,3 +119,43 @@ back = sig.remove_dc().to_dataframe(value_column="voltage", time_index=True)
 
 `Signal.from_csv("sensor_log.csv", value_column="voltage", time_column="timestamp")` does the same
 in one step.
+
+## Filter semantics
+
+`lowpass`, `highpass`, `bandpass` and `bandstop` are **zero-phase** filters. Each designs a
+Butterworth of the requested `order` as second-order sections, then runs it over the data forward
+and backward with `scipy.signal.sosfiltfilt`. Three consequences are worth knowing before you
+quote a number from one:
+
+- **No phase distortion.** The forward pass's phase shift is exactly undone by the backward pass,
+  so features stay where they were. This is why the filters are safe to use before peak
+  detection: an ECG R-peak comes out at the time it went in.
+- **The magnitude response is squared.** A Butterworth is -3.01 dB at its cutoff; applying it
+  twice makes that **-6.02 dB** (linear magnitude is squared so logarithmic dB is doubled), at
+  every order, and the roll-off is that of a filter of order `2 * order`. If you need -3 dB at
+  the frequency you pass in, design for it explicitly.
+- **It is not causal.** Each output sample depends on samples that arrive later, so this cannot
+  run on a stream. For real-time or causal work use `scipy.signal.sosfilt` on `sig.data` and
+  accept the phase shift, or compensate for it yourself.
+
+Second-order sections rather than transfer-function `(b, a)` coefficients are a deliberate
+choice: high-order or narrow-band IIR designs put poles close together near the unit circle,
+where `(b, a)` loses so much precision that the output can come back as all-NaN. The SOS form
+stays numerically stable.
+
+```python
+import numpy as np
+from convolinear import Signal
+
+sr = 1000.0
+tone = Signal.sine(frequency=100.0, duration=4.0, sample_rate=sr)
+filtered = tone.lowpass(cutoff=100.0)
+
+# Measure the gain at the cutoff, ignoring half a second of edge transient.
+edge = int(0.5 * sr)
+ratio = np.sqrt(np.mean(filtered.data[edge:-edge] ** 2)) / np.sqrt(
+    np.mean(tone.data[edge:-edge] ** 2)
+)
+print(f"{20 * np.log10(ratio):.2f} dB")
+# -6.02 dB
+```

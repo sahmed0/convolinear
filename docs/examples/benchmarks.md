@@ -48,7 +48,10 @@ FFT path, so if you are convolving with a very short kernel in a hot loop, calli
 
 ## Filter throughput
 
-A 4th-order Butterworth lowpass at 1 kHz cutoff, 44.1 kHz sample rate:
+A 4th-order Butterworth lowpass at 1 kHz cutoff, 44.1 kHz sample rate. Note that `lowpass` is
+zero-phase: the design is applied forward and then backward, so every figure below is the cost of
+two passes over the data, and the response at the cutoff is -6.02 dB rather than -3.01 dB. See
+[Filter semantics](../quickstart.md#filter-semantics).
 
 | Signal length | Time (min) | Throughput |
 |--------------:|-----------:|-----------:|

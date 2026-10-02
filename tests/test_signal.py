@@ -3,6 +3,7 @@ operators, filters, convolution/correlation/delay, peaks, and generators."""
 
 import numpy as np
 import pytest
+from scipy import signal as scipy_signal
 
 from convolinear import Signal
 
@@ -210,6 +211,41 @@ class TestFiltering:
         assert isinstance(filtered, Signal)
         # Energy should be preserved roughly since 440 Hz is in the band
         assert np.std(filtered.data) > 0.5 * np.std(sig.data)
+
+    def test_cutoff_gain_is_minus_6_db_by_design(self):
+        """Forward-backward filtering squares the response: -3.01 dB becomes -6.02 dB
+        (linear magnitude is squared so logarithmic dB is doubled).
+
+        This is the analytic half of the claim - it pins the design, not the
+        application path. Butterworth is -3.01 dB at its cutoff at every order,
+        so the doubled figure is order-independent.
+        """
+        sample_rate, cutoff = 1000.0, 100.0
+        for order in (2, 4, 8):
+            sos = scipy_signal.butter(order, cutoff / (sample_rate / 2), btype="low", output="sos")
+            _, response = scipy_signal.sosfreqz(sos, worN=[cutoff], fs=sample_rate)
+            single_pass_db = 20 * np.log10(abs(response[0]))
+            assert single_pass_db == pytest.approx(-3.0103, abs=1e-3)
+            # sosfiltfilt applies the same response twice.
+            assert 2 * single_pass_db == pytest.approx(-6.0206, abs=1e-3)
+
+    def test_tone_at_cutoff_is_attenuated_by_6_db(self):
+        """A tone at the cutoff comes out 6 dB down, not 3 dB down.
+
+        The end-to-end version of the test above: this one would fail if
+        ``_butter_filter`` were switched to a single-pass ``sosfilt``. Half a
+        second is trimmed from each end so the filter's edge transient does not
+        pollute the RMS.
+        """
+        sample_rate, cutoff = 1000.0, 100.0
+        tone = Signal.sine(frequency=cutoff, duration=4.0, sample_rate=sample_rate)
+        filtered = tone.lowpass(cutoff=cutoff)
+
+        edge = int(0.5 * sample_rate)
+        rms_in = np.sqrt(np.mean(tone.data[edge:-edge] ** 2))
+        rms_out = np.sqrt(np.mean(filtered.data[edge:-edge] ** 2))
+
+        assert 20 * np.log10(rms_out / rms_in) == pytest.approx(-6.02, abs=0.05)
 
 
 class TestHighpass:
