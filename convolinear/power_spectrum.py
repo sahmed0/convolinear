@@ -6,23 +6,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
-from scipy import signal as scipy_signal
 
-from .spectrum import _limit_to_max_freq
+from ._util import frozen, in_band_mask, limit_to_max_freq, top_peaks
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
-
-
-def _frozen(values: npt.ArrayLike) -> npt.NDArray[np.float64]:
-    """Return a read-only float64 copy of ``values``."""
-    arr = np.asarray(values, dtype=np.float64)
-    if arr is values:
-        # np.asarray returned the caller's own object - copy so freezing
-        # doesn't mutate an array the caller still holds.
-        arr = arr.copy()
-    arr.flags.writeable = False
-    return arr
 
 
 class PowerSpectrum:
@@ -46,8 +34,8 @@ class PowerSpectrum:
         Raises:
             ValueError: if the two arrays differ in shape or are empty.
         """
-        freqs = _frozen(frequencies)
-        pwr = _frozen(power)
+        freqs = frozen(frequencies)
+        pwr = frozen(power)
 
         if freqs.shape != pwr.shape:
             raise ValueError(
@@ -106,12 +94,7 @@ class PowerSpectrum:
         Raises:
             ValueError: if ``n`` is less than 1.
         """
-        if n < 1:
-            raise ValueError(f"n must be at least 1, got {n}.")
-        peak_idx, _ = scipy_signal.find_peaks(self._power, prominence=min_prominence)
-        order = np.argsort(self._power[peak_idx])[::-1][:n]
-        top = peak_idx[order]
-        return [(float(self._frequencies[i]), float(self._power[i])) for i in top]
+        return top_peaks(self._frequencies, self._power, n, min_prominence)
 
     def in_range(self, low: float, high: float) -> PowerSpectrum:
         """Return the sub-band ``[low, high]`` Hz as a new PowerSpectrum.
@@ -123,18 +106,7 @@ class PowerSpectrum:
         Raises:
             ValueError: if ``low > high`` or no bin falls inside the band.
         """
-        if low > high:
-            raise ValueError(f"low ({low}) must not exceed high ({high}).")
-        mask = (self._frequencies >= low) & (self._frequencies <= high)
-        if not mask.any():
-            spacing = (
-                self._frequencies[1] - self._frequencies[0] if len(self._frequencies) > 1 else 0
-            )
-            raise ValueError(
-                f"No frequency bins in [{low}, {high}] Hz. This estimate spans "
-                f"{self._frequencies[0]:g}-{self._frequencies[-1]:g} Hz with "
-                f"{spacing:g} Hz spacing."
-            )
+        mask = in_band_mask(self._frequencies, low, high, "estimate")
         return PowerSpectrum(self._frequencies[mask], self._power[mask])
 
     def plot(
@@ -156,7 +128,7 @@ class PowerSpectrum:
         if ax is None:
             _, ax = plt.subplots(figsize=(10, 3))
 
-        freqs, pwr = _limit_to_max_freq(self._frequencies, self._power, max_freq)
+        freqs, pwr = limit_to_max_freq(self._frequencies, self._power, max_freq)
 
         ax.plot(freqs, pwr, linewidth=0.8)
         ax.set_xlabel(xlabel or "Frequency (Hz)")

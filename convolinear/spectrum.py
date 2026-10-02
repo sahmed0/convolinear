@@ -7,30 +7,13 @@ from typing import TYPE_CHECKING, Self, cast
 
 import numpy as np
 import numpy.typing as npt
-from scipy import signal as scipy_signal
+
+from ._util import in_band_mask, limit_to_max_freq, top_peaks
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
 
     from .signal import Signal
-
-
-def _limit_to_max_freq(
-    frequencies: npt.NDArray[np.float64],
-    values: npt.NDArray[np.float64],
-    max_freq: float | None,
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    """Restrict a frequency axis (and its values) to ``<= max_freq``.
-
-    Shared by :meth:`Spectrum.plot` and :meth:`Spectrogram.plot`. ``values``
-    may be 1-D (magnitude per bin) or 2-D (frequency x time); in both cases the
-    boolean mask selects rows along the frequency axis. Returns the inputs
-    unchanged when ``max_freq`` is ``None``.
-    """
-    if max_freq is None:
-        return frequencies, values
-    mask = frequencies <= max_freq
-    return frequencies[mask], values[mask]
 
 
 class Spectrum:
@@ -189,13 +172,7 @@ class Spectrum:
         Raises:
             ValueError: if ``n`` is less than 1.
         """
-        if n < 1:
-            raise ValueError(f"n must be at least 1, got {n}.")
-        magnitudes = self.magnitudes
-        peak_idx, _ = scipy_signal.find_peaks(magnitudes, prominence=min_prominence)
-        order = np.argsort(magnitudes[peak_idx])[::-1][:n]
-        top = peak_idx[order]
-        return [(float(self._frequencies[i]), float(magnitudes[i])) for i in top]
+        return top_peaks(self._frequencies, self.magnitudes, n, min_prominence)
 
     def in_range(self, low: float, high: float) -> Spectrum:
         """Zero every bin outside [low, high] Hz (an ideal brick-wall selection).
@@ -211,18 +188,7 @@ class Spectrum:
         Raises:
             ValueError: if ``low > high`` or no bin falls inside the band.
         """
-        if low > high:
-            raise ValueError(f"low ({low}) must not exceed high ({high}).")
-        mask = (self._frequencies >= low) & (self._frequencies <= high)
-        if not mask.any():
-            spacing = (
-                self._frequencies[1] - self._frequencies[0] if len(self._frequencies) > 1 else 0
-            )
-            raise ValueError(
-                f"No frequency bins in [{low}, {high}] Hz. This spectrum spans "
-                f"{self._frequencies[0]:g}-{self._frequencies[-1]:g} Hz with "
-                f"{spacing:g} Hz spacing."
-            )
+        mask = in_band_mask(self._frequencies, low, high, "spectrum")
         coeffs = np.where(mask, self._coefficients, 0)
         return Spectrum(coeffs, self._frequencies, self._n_samples, self._sample_rate, self._scale)
 
@@ -333,7 +299,7 @@ class Spectrum:
         if ax is None:
             _, ax = plt.subplots(figsize=(10, 3))
 
-        freqs, mags = _limit_to_max_freq(self._frequencies, self.magnitudes, max_freq)
+        freqs, mags = limit_to_max_freq(self._frequencies, self.magnitudes, max_freq)
 
         ax.plot(freqs, mags, linewidth=0.8)
         ax.set_xlabel(xlabel or "Frequency (Hz)")

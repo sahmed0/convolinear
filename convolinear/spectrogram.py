@@ -7,19 +7,10 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import numpy.typing as npt
 
+from ._util import frozen, limit_to_max_freq
+
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
-
-
-def _frozen(values: npt.ArrayLike) -> npt.NDArray[np.float64]:
-    """Return a read-only float64 copy of ``values`` (never aliases the input)."""
-    arr = np.asarray(values, dtype=np.float64)
-    if arr is values:
-        # np.asarray returned the caller's own object - copy so freezing
-        # doesn't mutate an array the caller still holds.
-        arr = arr.copy()
-    arr.flags.writeable = False
-    return arr
 
 
 class Spectrogram:
@@ -40,9 +31,9 @@ class Spectrogram:
         times: npt.ArrayLike,
         magnitudes: npt.ArrayLike,
     ):
-        freqs = _frozen(frequencies)
-        frames = _frozen(times)
-        mags = _frozen(magnitudes)
+        freqs = frozen(frequencies)
+        frames = frozen(times)
+        mags = frozen(magnitudes)
 
         if len(freqs) == 0 or len(frames) == 0:
             raise ValueError(
@@ -131,9 +122,7 @@ class Spectrogram:
         if ax is None:
             _, ax = plt.subplots(figsize=(10, 4))
 
-        from .spectrum import _limit_to_max_freq
-
-        freqs, mags = _limit_to_max_freq(self.frequencies, self.magnitudes, max_freq)
+        freqs, mags = limit_to_max_freq(self.frequencies, self.magnitudes, max_freq)
 
         if db_scale:
             # Floor tiny values so log10 stays finite, then convert to dB.
