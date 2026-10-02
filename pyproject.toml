@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling >= 1.26"]
+requires = ["hatchling >= 1.27"]
 build-backend = "hatchling.build"
 
 # Only include source files, README and LICENSE in .tar.gz file
@@ -16,9 +16,10 @@ version = "0.2.0"
 description = "Fluent signal processing for Python, one line at a time."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-    { name = "Sajid Ahmed", email = "bracer.chasm-8i@icloud.com" },
+    { name = "Sajid Ahmed" },
 ]
 keywords = [
     "signal-processing",
@@ -44,8 +45,8 @@ classifiers = [
     "Typing :: Typed",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",

@@ -49,4 +49,4 @@ jobs:
       - run: uv run ruff check . --output-format=github
       - run: uv run ruff format --check .
       - run: uv run mypy convolinear
-      - run: uv run pytest --cov=convolinear --cov-report=term --cov-fail-under=85
+      - run: uv run pytest --cov=convolinear --cov-report=term --cov-fail-under=93
