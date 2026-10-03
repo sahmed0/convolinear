@@ -5,5 +5,5 @@ from .signal import PeakResult, Signal
 from .spectrogram import Spectrogram
 from .spectrum import Spectrum
 
-__version__ = "0.2.0"
+__version__ = "0.2.1rc1"
 __all__ = ["PeakResult", "PowerSpectrum", "Signal", "Spectrogram", "Spectrum"]

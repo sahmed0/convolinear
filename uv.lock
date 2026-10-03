@@ -403,7 +403,7 @@ wheels = [
 
 [[package]]
 name = "convolinear"
-version = "0.2.0"
+version = "0.2.1rc1"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
