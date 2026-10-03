@@ -1,0 +1,119 @@
+name: Release
+
+# Publish by pushing a git tag on a commit already on main.
+# The smoke test gates the upload, and the tested artifact is the one uploaded,
+# so a broken artifact doesn't reach PyPI.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  MPLBACKEND: Agg
+
+jobs:
+  # Check a bad tag fails in seconds rather than after the smoke matrix.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history and branches, for the ancestry check against main.
+          fetch-depth: 0
+
+      - name: Check the tagged commit is on main
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at $(git rev-parse HEAD), which is not on main."
+            exit 1
+          fi
+
+      # A tag that disagrees with the declared version yields a release nobody
+      # can reproduce from the source tree.
+      - name: Check the tag matches the declared version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          project=$(python3 -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          package=$(python3 -c "import re, pathlib; print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('convolinear/__init__.py').read_text()).group(1))")
+          echo "tag=$tag pyproject=$project package=$package"
+          test "$tag" = "$project" && test "$tag" = "$package"
+
+  smoke:
+    needs: check
+    strategy:
+      # Never cancel the other platforms, need to know which OS fails.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv run --no-project --python 3.13 scripts/smoke_test_dist.py
+
+      # The wheel is py3-none-any, so one platform's build serves all. Publish uploads
+      # exactly these files, never a rebuild.
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      contents: read
+      # Trusted Publishing uses short-lived OIDC token for PyPI.
+      # No API token in repo.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: publish
+    # Skip release notes instead of failing on an empty file if use 'release candidate' tag.
+    # Extend condition to alpha / beta tags if needed.
+    if: ${{ !contains(github.ref_name, 'rc') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Extract this version's section from the changelog
+        run: |
+          python3 - > RELEASE_NOTES.md <<'PY'
+          import os, pathlib, re
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = rf"^## \[{re.escape(tag.lstrip('v'))}\].*?$(.*?)(?=^## \[|\Z)"
+          found = re.search(pattern, text, re.M | re.S)
+          print((found.group(1) if found else "").strip())
+          PY
+          test -s RELEASE_NOTES.md
+
+      - run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md
+        env:
+          GH_TOKEN: ${{ github.token }}
