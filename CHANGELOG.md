@@ -5,6 +5,51 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-04
+
+A documentation and packaging release. No API or behaviour changes; every 0.2.0 call site keeps
+working exactly as it did.
+
+### Fixed
+
+- **The filters' semantics are now documented.** `lowpass`, `highpass`, `bandpass` and `bandstop`
+  have always been zero-phase (`sosfiltfilt`, forward and backward), which squares the magnitude
+  response: the gain at the cutoff you pass in is -6.02 dB, not -3.01 dB, the effective order is
+  doubled, and the filter is non-causal. None of this was explained in documentation in earlier
+  releases.
+  It is now, in all four docstrings, on the benchmarks page, and in a new "Filter semantics"
+  section of the quickstart page. A test pins the -6.02 dB figure both analytically and
+  end to end.
+- The hero image's caption claimed the echo sat "3 dB under the noise floor". That number was
+  `20*log10(0.7)`, an amplitude ratio compared against a noise standard deviation; the actual
+  power SNR was -6 dB. The hero has been rebuilt to show the same echo at -6 dB and at -20 dB
+  SNR, with the convention stated, and the caption now matches what the image shows.
+- The `from_audio()` ImportError concatenated three sentences without separators.
+- The `from_matlab()` docstring trailed off into a sentence about a `from_hdf5` constructor that
+ does not exist in the current release.
+- The quickstart said `+` mixes signals "of equal length"; it zero-pads the shorter one.
+
+### Changed
+
+- Documentation links point at the custom domain directly instead of redirecting github pages
+ domain.
+- `spectrogram()` and `psd()` docstrings now state that SciPy detrends each segment, so a
+  constant offset does not appear in the result; `fft()` notes that its windows are NumPy's
+  symmetric variants where the other two use SciPy's periodic ones.
+- Packaging metadata uses the PEP 639 licence expression (`license = "MIT"` plus
+  `license-files`) instead of the deprecated table form.
+- The author email has been dropped from the package metadata. Attribution is unchanged and the
+  issue tracker is the contact route; `[project.urls]` already points at it.
+- Shared internal helpers moved to a single private `convolinear/_util.py`.
+- Images live under `docs/assets/` instead of the repository root.
+
+### Added
+
+- A tag-triggered release workflow: the distribution smoke test gates publication, PyPI upload
+  uses Trusted Publishing (OIDC, no stored token), and the GitHub Release notes are generated
+  from this file.
+- `RELEASING.md` containing a release checklist and design decisions.
+
 ## [0.2.0] - 2026-08-11
 
 A correctness and feature release. The frequency-domain classes were rebuilt so that a transform can be
@@ -13,11 +58,11 @@ changes and no compatibility shims; the notes below are the migration path.
 
 ### Added
 
-- `PowerSpectrum` and `Signal.psd()` — power spectral density estimation with Welch's method, for noisy
+- `PowerSpectrum` and `Signal.psd()` - power spectral density estimation with Welch's method, for noisy
   data where a single-shot FFT has variance that never shrinks.
-- `Spectrum.coefficients`, `.phase` and `.power` — the raw complex coefficients and derived views over
+- `Spectrum.coefficients`, `.phase` and `.power` - the raw complex coefficients and derived views over
   them. Phase information is now available at all.
-- `Spectrum.from_magnitudes()` — zero-phase synthesis from a magnitude spectrum. This is where the old
+- `Spectrum.from_magnitudes()` - zero-phase synthesis from a magnitude spectrum. This is where the old
   lossy `to_signal(sample_rate)` behaviour went; spectral-shaping workflows use this now.
 - Float sample rates, including rates below 1 Hz. Daily-sampled data loads at its true `1/86400 Hz`
   instead of being rounded to zero and rejected.
@@ -30,7 +75,7 @@ changes and no compatibility shims; the notes below are the migration path.
 ### Changed
 
 - **`Spectrum` stores complex coefficients instead of magnitudes.** `to_signal()` takes no argument and
-  is now a lossless inverse — `sig.fft().to_signal()` returns the original signal to floating-point
+  is now a lossless inverse - `sig.fft().to_signal()` returns the original signal to floating-point
   precision. Magnitude values are unchanged; `.magnitudes` reads exactly as before.
 - **The `Spectrum` constructor** now takes `(coefficients, frequencies, n_samples, sample_rate, scale)`.
   For synthesis from magnitudes, use `Spectrum.from_magnitudes(mags, freqs, sample_rate).to_signal()`.
@@ -38,7 +83,7 @@ changes and no compatibility shims; the notes below are the migration path.
   frequency axis and stays invertible, so `in_range(...).to_signal()` is a brick-wall filter. It raises
   if the band contains no bins.
 - **`Spectrum.top_n()` returns true spectral peaks**, found with `scipy.signal.find_peaks`, rather than
-  the `n` largest bins — the largest bins of a leaky spectrum are usually the same lobe sampled several
+  the `n` largest bins - the largest bins of a leaky spectrum are usually the same lobe sampled several
   times. It returns *up to* `n` peaks, possibly fewer or none.
 - **`Signal.data` and `Signal.sample_rate` are read-only properties** over frozen arrays; the same holds
   for the arrays on `Spectrum`, `Spectrogram` and `PowerSpectrum`. Writing to them raises. Arrays passed
@@ -82,3 +127,4 @@ changes and no compatibility shims; the notes below are the migration path.
 
 [0.1.0]: https://github.com/sahmed0/convolinear/releases/tag/v0.1.0
 [0.2.0]: https://github.com/sahmed0/convolinear/releases/tag/v0.2.0
+[0.2.1]: https://github.com/sahmed0/convolinear/releases/tag/v0.2.1
