@@ -12,7 +12,7 @@ packages = ["convolinear"]
 
 [project]
 name = "convolinear"
-version = "0.2.1rc1"
+version = "0.2.1"
 description = "Fluent signal processing for Python, one line at a time."
 readme = "README.md"
 requires-python = ">=3.11"
