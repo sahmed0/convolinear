@@ -99,7 +99,7 @@ noise = Signal.noise(duration=1.0, sample_rate=8000, amplitude=0.5, seed=42)
 cleaned = (tone + noise).bandpass(300, 600).normalize()
 
 spectrum = cleaned.fft()
-print(f"Dominant frequency: {spectrum.peak_frequency:.1f} Hz")   # ~440.0 Hz
+print(f"Dominant frequency: {spectrum.peak_frequency:.1f} Hz")  # ~440.0 Hz
 
 for freq, magnitude in spectrum.top_n(3):
     print(f"{freq:7.1f} Hz   magnitude {magnitude:.4f}")
@@ -116,7 +116,7 @@ temperatures, one sample per day:
 ```python
 sig = Signal(temps, sample_rate=1 / 86400)
 cycle_hz = sig.remove_dc().fft(window="hann").peak_frequency
-print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")   # Dominant period: 365 days
+print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")  # Dominant period: 365 days
 ```
 
 ## Capabilities

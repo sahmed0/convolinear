@@ -18,11 +18,13 @@ import numpy as np
 from convolinear import Signal
 
 days = np.arange(3 * 365)
-temps = 12 + 8 * np.sin(2 * np.pi * days / 365.25) + np.random.default_rng(0).normal(0, 2, days.size)
+temps = (
+    12 + 8 * np.sin(2 * np.pi * days / 365.25) + np.random.default_rng(0).normal(0, 2, days.size)
+)
 
-sig = Signal(temps, sample_rate=1 / 86400)      # one sample per day
+sig = Signal(temps, sample_rate=1 / 86400)  # one sample per day
 cycle_hz = sig.remove_dc().fft(window="hann").peak_frequency
-print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")   # Dominant period: 365 days
+print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")  # Dominant period: 365 days
 ```
 
 Three things are doing the work here:
@@ -46,7 +48,7 @@ cycle you are hunting - a 365-sample segment spans exactly one year:
 
 ```python
 ps = sig.remove_dc().psd(segment_length=365)
-print(f"Dominant period: {1 / ps.peak_frequency / 86400:.0f} days")   # Dominant period: 365 days
+print(f"Dominant period: {1 / ps.peak_frequency / 86400:.0f} days")  # Dominant period: 365 days
 ps.plot(max_freq=1e-6, title="Daily temperatures: power spectral density")
 ```
 
@@ -59,7 +61,7 @@ Loading a dated series infers the rate for you, with no rounding:
 
 ```python
 sig = Signal.from_csv("prices.csv", value_column="close", time_column="date")
-print(sig.sample_rate)   # ~1.1574074074074073e-05 for daily rows
+print(sig.sample_rate)  # ~1.1574074074074073e-05 for daily rows
 ```
 
 `Signal.from_pandas(df)` does the same for a `DatetimeIndex`. Note the inferred rate is the raw

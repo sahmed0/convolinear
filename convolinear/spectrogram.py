@@ -91,7 +91,7 @@ class Spectrogram:
         the frequency with the largest magnitude. Useful for tracking how a
         tone or formant moves over time (e.g. a chirp or a glissando).
         """
-        return cast("npt.NDArray[np.float64]", self.frequencies[np.argmax(self.magnitudes, axis=0)])
+        return np.asarray(self.frequencies[np.argmax(self.magnitudes, axis=0)], dtype=np.float64)
 
     def plot(
         self,

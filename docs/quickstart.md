@@ -12,10 +12,9 @@ from convolinear import Signal
 noisy = Signal.from_wav("field_recording.wav")
 
 cleaned = (
-    noisy
-    .highpass(80)         # drop low-frequency rumble
+    noisy.highpass(80)  # drop low-frequency rumble
     .bandpass(200, 8000)  # keep the speech/music range
-    .normalize()          # scale the peak to 1.0
+    .normalize()  # scale the peak to 1.0
 )
 
 cleaned.to_wav("cleaned.wav")
@@ -36,7 +35,7 @@ from convolinear import Signal
 
 sr = 44100
 chord = (
-    Signal.sine(440, duration=2.0, sample_rate=sr)   # A4
+    Signal.sine(440, duration=2.0, sample_rate=sr)  # A4
     + Signal.sine(554, duration=2.0, sample_rate=sr)  # C#5
     + Signal.sine(659, duration=2.0, sample_rate=sr)  # E5
 ).normalize()

@@ -1124,6 +1124,7 @@ class Signal:
         n = len(self.data)
         data = self.data
 
+        scale: float
         if window is not None:
             key = Signal._validate_window(window)
             w = Signal._FFT_WINDOWS[key](n)
