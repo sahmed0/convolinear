@@ -37,7 +37,7 @@ Three things are doing the work here:
 - **`window="hann"`** - three years is not a whole number of 365.25-day cycles, so the tapering
   suppresses the spectral leakage that discontinuity would otherwise smear across neighbouring bins.
 
-The peak lands at `3.17e-08` Hz. Inverting that gives a period of 31.56 million seconds, which is
+The peak lands at `3.17e-08` Hz. Inverting that gives a period of 31.54 million seconds, which is
 365 days.
 
 ## The same analysis with a PSD

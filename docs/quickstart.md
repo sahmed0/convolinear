@@ -81,7 +81,7 @@ from convolinear import Signal
 
 # A chirp sweeping 200 Hz -> 2000 Hz over 3 seconds
 chirp = Signal.from_function(
-    lambda t: np.sin(2 * np.pi * (200 + 600 * t) * t),
+    lambda t: np.sin(2 * np.pi * (200 + 300 * t) * t),
     duration=3.0,
     sample_rate=16000,
 )
