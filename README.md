@@ -119,6 +119,9 @@ cycle_hz = sig.remove_dc().fft(window="hann").peak_frequency
 print(f"Dominant period: {1 / cycle_hz / 86400:.0f} days")  # Dominant period: 365 days
 ```
 
+The full walkthrough, including how `temps` is generated, is in
+[Daily data: finding slow cycles](https://convolinear.sajidahmed.co.uk/examples/daily_cycles/).
+
 ## Capabilities
 
 - **Load from anywhere** - WAV, FLAC/OGG/MP3 (via soundfile), CSV, Parquet, NumPy, pandas, MATLAB,
